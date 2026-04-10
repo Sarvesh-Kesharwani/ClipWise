@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { AppData, Video, Instance, Clip } from '../types';
+import type { AppData, Video, Instance, Clip, Folder, Remix } from '../types';
 import { AppContext } from './AppContextValue';
 import type { CloudSyncState } from './AppContextValue';
 import { loadStoredAppData, saveAppData } from '../utils/storage';
-import { generateClipsForDuration } from '../utils/helpers';
+import { generateClipsForDuration, generateId } from '../utils/helpers';
 import {
   createDrivePayload,
   downloadSyncPayload,
@@ -16,9 +16,43 @@ import {
 } from '../utils/googleDriveSync';
 const GOOGLE_CLIENT_ID = getGoogleClientId();
 
+function migrateAppData(data: AppData): AppData {
+  let migrated: AppData = {
+    ...data,
+    folders: Array.isArray(data.folders) ? data.folders : [],
+    remixes: Array.isArray(data.remixes) ? data.remixes : [],
+  };
+
+  // Migrate old data that has no folders array
+  if (!data.folders || !Array.isArray(data.folders)) {
+    const defaultFolder: Folder = {
+      id: generateId(),
+      name: 'Uncategorized',
+      createdAt: Date.now(),
+    };
+    migrated = {
+      ...migrated,
+      folders: [defaultFolder],
+      videos: migrated.videos.map(v => v.folderId ? v : { ...v, folderId: defaultFolder.id }),
+    };
+  }
+
+  // Assign orphaned videos (no folderId) to first folder
+  const hasOrphans = migrated.videos.some(v => !v.folderId);
+  if (hasOrphans && migrated.folders.length > 0) {
+    const fallbackId = migrated.folders[0].id;
+    migrated = {
+      ...migrated,
+      videos: migrated.videos.map(v => v.folderId ? v : { ...v, folderId: fallbackId }),
+    };
+  }
+
+  return migrated;
+}
+
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [storedData] = useState(() => loadStoredAppData());
-  const [data, setData] = useState<AppData>(storedData.data);
+  const [data, setData] = useState<AppData>(() => migrateAppData(storedData.data));
   const [dataUpdatedAt, setDataUpdatedAt] = useState(storedData.updatedAt);
   const [cloudSync, setCloudSync] = useState<CloudSyncState>({
     isConfigured: Boolean(GOOGLE_CLIENT_ID),
@@ -58,8 +92,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteVideo = useCallback((videoId: string) => {
     setDataWithLocalChange(prev => ({
+      ...prev,
       videos: prev.videos.filter(v => v.id !== videoId),
       instances: prev.instances.filter(i => i.videoId !== videoId),
+      remixes: prev.remixes
+        .map(remix => ({
+          ...remix,
+          clipRefs: remix.clipRefs.filter(ref => ref.videoId !== videoId),
+        }))
+        .filter(remix => remix.clipRefs.length > 0),
     }));
   }, [setDataWithLocalChange]);
 
@@ -78,6 +119,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDataWithLocalChange(prev => ({
       ...prev,
       instances: prev.instances.filter(i => i.id !== instanceId),
+      remixes: prev.remixes
+        .map(remix => ({
+          ...remix,
+          clipRefs: remix.clipRefs.filter(ref => ref.instanceId !== instanceId),
+        }))
+        .filter(remix => remix.clipRefs.length > 0),
     }));
   }, [setDataWithLocalChange]);
 
@@ -117,6 +164,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }),
     }));
   }, [setDataWithLocalChange]);
+
+  const addFolder = useCallback((folder: Folder) => {
+    setDataWithLocalChange(prev => ({ ...prev, folders: [...prev.folders, folder] }));
+  }, [setDataWithLocalChange]);
+
+  const renameFolder = useCallback((folderId: string, name: string) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      folders: prev.folders.map(f => f.id === folderId ? { ...f, name } : f),
+    }));
+  }, [setDataWithLocalChange]);
+
+  const deleteFolder = useCallback((folderId: string) => {
+    setDataWithLocalChange(prev => {
+      // Move videos from deleted folder to first remaining folder, or remove folderId
+      const remaining = prev.folders.filter(f => f.id !== folderId);
+      const fallbackId = remaining[0]?.id ?? null;
+      return {
+        ...prev,
+        folders: remaining,
+        videos: prev.videos.map(v =>
+          v.folderId === folderId ? { ...v, folderId: fallbackId ?? undefined } : v
+        ),
+      };
+    });
+  }, [setDataWithLocalChange]);
+
+  const moveVideoToFolder = useCallback((videoId: string, folderId: string | null) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      videos: prev.videos.map(v =>
+        v.id === videoId ? { ...v, folderId: folderId ?? undefined } : v
+      ),
+    }));
+  }, [setDataWithLocalChange]);
+
+  const addRemix = useCallback((remix: Remix) => {
+    setDataWithLocalChange(prev => ({ ...prev, remixes: [...prev.remixes, remix] }));
+  }, [setDataWithLocalChange]);
+
+  const deleteRemix = useCallback((remixId: string) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      remixes: prev.remixes.filter(remix => remix.id !== remixId),
+    }));
+  }, [setDataWithLocalChange]);
+
+  const getRemix = useCallback((remixId: string) => {
+    return data.remixes.find(remix => remix.id === remixId);
+  }, [data.remixes]);
 
   const refreshToken = useCallback(async (): Promise<string | null> => {
     try {
@@ -210,7 +307,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         syncFileIdRef.current = file.id;
         lastCloudSavedAtRef.current = payload.savedAt;
-        setData(payload.data);
+        setData(migrateAppData(payload.data));
         setDataUpdatedAt(payload.savedAt);
         setCloudSync(prev => ({
           ...prev,
@@ -251,7 +348,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const payload = await downloadSyncPayload(token, file.id);
         if (payload && payload.savedAt > dataUpdatedAtRef.current) {
           lastCloudSavedAtRef.current = payload.savedAt;
-          setData(payload.data);
+          setData(migrateAppData(payload.data));
           setDataUpdatedAt(payload.savedAt);
           setCloudSync(prev => ({
             ...prev,
@@ -313,11 +410,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider value={{
       videos: data.videos,
       instances: data.instances,
+      folders: data.folders,
+      remixes: data.remixes,
       cloudSync,
       addVideo, deleteVideo, updateVideo,
       addInstance, deleteInstance, updateClip,
       getInstancesForVideo, getInstance, getVideo,
       generateClips,
+      addFolder, renameFolder, deleteFolder, moveVideoToFolder,
+      addRemix, deleteRemix, getRemix,
       signInWithGoogle,
       signOutGoogle,
       syncToGoogleDrive,

@@ -9,7 +9,7 @@ export interface StoredAppData {
 }
 
 function emptyAppData(): AppData {
-  return { videos: [], instances: [] };
+  return { videos: [], instances: [], folders: [], remixes: [] };
 }
 
 function now(): number {

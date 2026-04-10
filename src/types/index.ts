@@ -7,6 +7,13 @@ export interface Video {
   duration: number;
   thumbnail?: string;
   createdAt: number;
+  folderId?: string;
+}
+
+export interface Folder {
+  id: string;
+  name: string;
+  createdAt: number;
 }
 
 export interface Instance {
@@ -27,11 +34,27 @@ export interface Clip {
   summary: string;
 }
 
+export interface RemixClipRef {
+  id: string;
+  videoId: string;
+  instanceId: string;
+  clipIndex: number;
+}
+
+export interface Remix {
+  id: string;
+  title: string;
+  clipRefs: RemixClipRef[];
+  createdAt: number;
+}
+
 export type ClipStatus = 'unwatched' | 'watched' | 'summarized' | 'rewatched-2' | 'rewatched-3plus';
 
 export interface AppData {
   videos: Video[];
   instances: Instance[];
+  folders: Folder[];
+  remixes: Remix[];
 }
 
 export interface PlayerRef {

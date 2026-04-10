@@ -9,13 +9,14 @@ interface Props {
 }
 
 export default function AddVideoModal({ onClose }: Props) {
-  const { addVideo } = useApp();
+  const { addVideo, folders } = useApp();
   const [tab, setTab] = useState<'local' | 'youtube'>('local');
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [fileName, setFileName] = useState('');
   const [playlistProgress, setPlaylistProgress] = useState<{ current: number; total: number } | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState(folders[0]?.id ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function handleLocalFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -38,6 +39,7 @@ export default function AddVideoModal({ onClose }: Props) {
         duration,
         thumbnail,
         createdAt: Date.now(),
+        folderId: selectedFolderId || undefined,
       });
       onClose();
     } catch {
@@ -78,6 +80,7 @@ export default function AddVideoModal({ onClose }: Props) {
         duration: 0,
         thumbnail,
         createdAt: Date.now(),
+        folderId: selectedFolderId || undefined,
       });
       onClose();
     } catch {
@@ -124,6 +127,7 @@ export default function AddVideoModal({ onClose }: Props) {
           duration: 0,
           thumbnail,
           createdAt: Date.now(),
+          folderId: selectedFolderId || undefined,
         });
 
         setPlaylistProgress({ current: i + 1, total: videoIds.length });
@@ -160,6 +164,22 @@ export default function AddVideoModal({ onClose }: Props) {
             YouTube
           </button>
         </div>
+
+        {folders.length > 1 && (
+          <div className="folder-picker">
+            <label htmlFor="folder-select">Add to folder:</label>
+            <select
+              id="folder-select"
+              className="input"
+              value={selectedFolderId}
+              onChange={e => setSelectedFolderId(e.target.value)}
+            >
+              {folders.map(f => (
+                <option key={f.id} value={f.id}>{f.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="tab-content">
           {tab === 'local' ? (
