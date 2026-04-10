@@ -32,6 +32,7 @@ export default function PlayerPage() {
   const trackersRef = useRef(new Map<number, WatchTracker>());
   const countedRef = useRef(new Set<number>());
   const prevClipRef = useRef(-1);
+  const seekingRef = useRef(false);
 
   const clips = instance?.clips || [];
 
@@ -80,6 +81,9 @@ export default function PlayerPage() {
   }, [clips]);
 
   const handleTimeUpdate = useCallback((time: number) => {
+    // Skip stale time updates that arrive during a pending seek
+    if (seekingRef.current) return;
+
     setCurrentTime(time);
 
     if (!clips.length || !instance) return;
@@ -133,8 +137,15 @@ export default function PlayerPage() {
     trackersRef.current.delete(newClipIdx);
     countedRef.current.delete(newClipIdx);
 
+    // Suppress stale time updates while seeking
+    seekingRef.current = true;
+    setCurrentTime(time);
+
     playerRef.current?.seek(time);
     playerRef.current?.play();
+
+    // Allow time updates again after seek settles
+    setTimeout(() => { seekingRef.current = false; }, 500);
   }
 
   function handleSeekToClip(index: number) {
