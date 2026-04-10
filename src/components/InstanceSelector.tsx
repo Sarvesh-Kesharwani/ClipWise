@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useApp } from '../store/AppContext';
+import { useApp } from '../store/useApp';
 import type { Instance } from '../types';
-import { generateId, formatDuration, generateClipsForDuration } from '../utils/helpers';
+import { currentTimestamp, generateId, formatDuration, generateClipsForDuration } from '../utils/helpers';
 
 interface Props {
   videoId: string;
@@ -34,7 +34,7 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
       name: name.trim(),
       clipSizeMinutes: clipSize,
       clips,
-      createdAt: Date.now(),
+      createdAt: currentTimestamp(),
     };
 
     addInstance(instance);

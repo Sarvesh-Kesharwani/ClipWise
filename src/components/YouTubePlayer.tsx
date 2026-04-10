@@ -1,4 +1,4 @@
-import { forwardRef, useRef, useImperativeHandle, useEffect } from 'react';
+import { forwardRef, useRef, useImperativeHandle, useEffect, useCallback } from 'react';
 import type { PlayerRef, PlayerProps } from '../types';
 import { loadYouTubeAPI } from '../utils/youtube';
 
@@ -16,7 +16,10 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
 
     // Keep latest callbacks in refs so the YT player always uses current versions
     const callbacksRef = useRef({ onTimeUpdate, onPlay, onPause, onReady, onEnded });
-    callbacksRef.current = { onTimeUpdate, onPlay, onPause, onReady, onEnded };
+
+    useEffect(() => {
+      callbacksRef.current = { onTimeUpdate, onPlay, onPause, onReady, onEnded };
+    }, [onTimeUpdate, onPlay, onPause, onReady, onEnded]);
 
     useImperativeHandle(ref, () => ({
       seek: (t: number) => {
@@ -25,6 +28,23 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
       play: () => { playerRef.current?.playVideo(); },
       pause: () => { playerRef.current?.pauseVideo(); },
     }));
+
+    const handleStateChange = useCallback((state: number) => {
+      clearInterval(pollRef.current);
+
+      if (state === window.YT.PlayerState.PLAYING) {
+        callbacksRef.current.onPlay();
+        pollRef.current = window.setInterval(() => {
+          if (playerRef.current?.getCurrentTime) {
+            callbacksRef.current.onTimeUpdate(playerRef.current.getCurrentTime());
+          }
+        }, 250);
+      } else if (state === window.YT.PlayerState.PAUSED) {
+        callbacksRef.current.onPause();
+      } else if (state === window.YT.PlayerState.ENDED) {
+        callbacksRef.current.onEnded();
+      }
+    }, []);
 
     useEffect(() => {
       mountedRef.current = true;
@@ -73,25 +93,7 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
         // Clean up the imperatively created element
         if (targetDiv.parentNode) targetDiv.parentNode.removeChild(targetDiv);
       };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [videoId]);
-
-    function handleStateChange(state: number) {
-      clearInterval(pollRef.current);
-
-      if (state === window.YT.PlayerState.PLAYING) {
-        callbacksRef.current.onPlay();
-        pollRef.current = window.setInterval(() => {
-          if (playerRef.current?.getCurrentTime) {
-            callbacksRef.current.onTimeUpdate(playerRef.current.getCurrentTime());
-          }
-        }, 250);
-      } else if (state === window.YT.PlayerState.PAUSED) {
-        callbacksRef.current.onPause();
-      } else if (state === window.YT.PlayerState.ENDED) {
-        callbacksRef.current.onEnded();
-      }
-    }
+    }, [videoId, handleStateChange]);
 
     return <div ref={containerRef} className="youtube-wrapper" />;
   }

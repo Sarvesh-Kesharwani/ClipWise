@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useApp } from '../store/AppContext';
+import { useApp } from '../store/useApp';
 import { storeVideoFile, extractVideoMetadata } from '../utils/videoDb';
 import { extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle, isPlaylistUrl, extractPlaylistId, fetchPlaylistVideoIds } from '../utils/youtube';
 import { generateId } from '../utils/helpers';

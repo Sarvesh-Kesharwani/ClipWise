@@ -1,5 +1,15 @@
 # React + TypeScript + Vite
 
+## Google Drive sync
+
+ClipWise can save settings and video metadata to the user's private Google Drive app data folder. Create a Google Cloud OAuth web client, add the app origin as an authorized JavaScript origin, enable the Google Drive API, and set:
+
+```env
+VITE_GOOGLE_CLIENT_ID=your-google-oauth-web-client-id.apps.googleusercontent.com
+```
+
+The sync uses the `https://www.googleapis.com/auth/drive.appdata` scope and writes `clipwise-data.json` to Drive's hidden app data folder. Local video files stay on the device in IndexedDB; the cloud backup stores video details, clips, watch counts, and summaries.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

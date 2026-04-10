@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useApp } from '../store/AppContext';
+import { useApp } from '../store/useApp';
 import VideoCard from '../components/VideoCard';
 import AddVideoModal from '../components/AddVideoModal';
 import InstanceSelector from '../components/InstanceSelector';
+import GoogleDriveSync from '../components/GoogleDriveSync';
 
 export default function Dashboard() {
   const { videos, getInstancesForVideo } = useApp();
@@ -24,6 +25,8 @@ export default function Dashboard() {
           + Add Video
         </button>
       </div>
+
+      <GoogleDriveSync />
 
       {videos.length === 0 ? (
         <div className="empty-state">

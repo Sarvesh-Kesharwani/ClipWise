@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useApp } from '../store/AppContext';
+import { useApp } from '../store/useApp';
 import LocalPlayer from '../components/LocalPlayer';
 import YouTubePlayer from '../components/YouTubePlayer';
 import ClipPanel from '../components/ClipPanel';
@@ -34,7 +34,7 @@ export default function PlayerPage() {
   const prevClipRef = useRef(-1);
   const seekingRef = useRef(false);
 
-  const clips = instance?.clips || [];
+  const clips = useMemo(() => instance?.clips || [], [instance?.clips]);
 
   function needsSummary(clip: Clip | undefined): clip is Clip {
     return Boolean(clip && clip.watchCount > 0 && !clip.summary.trim());
@@ -83,16 +83,16 @@ export default function PlayerPage() {
         }
       });
     } else {
-      setLoading(false);
+      queueMicrotask(() => setLoading(false));
     }
-  }, [video?.id, video?.source]);
+  }, [video]);
 
   // Generate clips when duration becomes available
   useEffect(() => {
     if (instance && duration > 0 && instance.clips.length === 0) {
       generateClips(instance.id, duration);
     }
-  }, [instance?.id, instance?.clips.length, duration, generateClips]);
+  }, [instance, duration, generateClips]);
 
   // Update video duration if not yet known
   useEffect(() => {

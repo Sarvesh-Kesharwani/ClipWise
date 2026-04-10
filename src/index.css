@@ -533,12 +533,77 @@ input, textarea {
 .dashboard-actions {
   display: flex;
   justify-content: center;
-  margin-bottom: 40px;
+  margin-bottom: 24px;
 }
 
 .btn-add {
   font-size: 17px;
   padding: 14px 36px;
+}
+
+/* ===== Cloud Sync ===== */
+.cloud-sync {
+  max-width: 860px;
+  margin: 0 auto 40px;
+  padding: 18px 20px;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-bottom: 5px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.cloud-sync-copy {
+  min-width: 0;
+}
+
+.cloud-sync-kicker {
+  display: block;
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.cloud-sync h2 {
+  font-size: 20px;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+
+.cloud-sync p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.cloud-sync-status {
+  margin-top: 8px;
+  font-weight: 700;
+}
+
+.cloud-sync-status.ready {
+  color: var(--green-dark);
+}
+
+.cloud-sync-status.error {
+  color: var(--red);
+}
+
+.cloud-sync-meta {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.cloud-sync-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 /* ===== Empty State ===== */
@@ -1089,6 +1154,13 @@ input, textarea {
   .player-main {
     padding: 16px;
   }
+  .cloud-sync {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .cloud-sync-actions {
+    justify-content: flex-start;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1100,5 +1172,9 @@ input, textarea {
   }
   .video-grid {
     grid-template-columns: 1fr;
+  }
+  .cloud-sync-actions .btn-primary,
+  .cloud-sync-actions .btn-secondary {
+    width: 100%;
   }
 }

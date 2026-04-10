@@ -4,6 +4,10 @@ export function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2, 9);
 }
 
+export function currentTimestamp(): number {
+  return Date.now();
+}
+
 export function formatTime(seconds: number): string {
   if (!seconds || !isFinite(seconds)) return '0:00';
   const h = Math.floor(seconds / 3600);
