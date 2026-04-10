@@ -2,7 +2,7 @@ export class WatchTracker {
   private watchedSeconds: Set<number> = new Set();
   private clipDuration: number;
   private lastTime: number = -1;
-  private readonly THRESHOLD = 0.8;
+  private readonly THRESHOLD = 0.98;
   private readonly MAX_JUMP = 3;
 
   constructor(clipDuration: number) {

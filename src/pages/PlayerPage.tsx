@@ -11,6 +11,9 @@ import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
 import { formatTime } from '../utils/helpers';
 
+const CELEBRATION_DURATION_MS = 1600;
+const SUMMARY_PROMPT_DELAY_MS = 900;
+
 export default function PlayerPage() {
   const { instanceId } = useParams<{ instanceId: string }>();
   const navigate = useNavigate();
@@ -28,11 +31,15 @@ export default function PlayerPage() {
   const [summaryClipIndex, setSummaryClipIndex] = useState(-1);
   const [videoSrc, setVideoSrc] = useState('');
   const [loading, setLoading] = useState(true);
+  const [clipWatchProgress, setClipWatchProgress] = useState(0);
+  const [celebration, setCelebration] = useState<{ key: number; clipNumber: number } | null>(null);
 
   const trackersRef = useRef(new Map<number, WatchTracker>());
   const countedRef = useRef(new Set<number>());
   const prevClipRef = useRef(-1);
   const seekingRef = useRef(false);
+  const celebrationTimerRef = useRef<number | null>(null);
+  const summaryTimerRef = useRef<number | null>(null);
 
   const clips = useMemo(() => instance?.clips || [], [instance?.clips]);
 
@@ -43,6 +50,29 @@ export default function PlayerPage() {
   function openSummary(clipIndex: number) {
     setSummaryClipIndex(clipIndex);
     setShowSummary(true);
+  }
+
+  function triggerCelebration(clipIndex: number) {
+    if (celebrationTimerRef.current !== null) {
+      window.clearTimeout(celebrationTimerRef.current);
+    }
+
+    setCelebration({ key: Date.now(), clipNumber: clipIndex + 1 });
+    celebrationTimerRef.current = window.setTimeout(() => {
+      setCelebration(null);
+      celebrationTimerRef.current = null;
+    }, CELEBRATION_DURATION_MS);
+  }
+
+  function openSummaryAfterCelebration(clipIndex: number) {
+    if (summaryTimerRef.current !== null) {
+      window.clearTimeout(summaryTimerRef.current);
+    }
+
+    summaryTimerRef.current = window.setTimeout(() => {
+      openSummary(clipIndex);
+      summaryTimerRef.current = null;
+    }, SUMMARY_PROMPT_DELAY_MS);
   }
 
   function requireSummaryBeforeLeaving(fromClipIndex: number, toClipIndex: number): boolean {
@@ -101,6 +131,17 @@ export default function PlayerPage() {
     }
   }, [video, duration, updateVideo]);
 
+  useEffect(() => {
+    return () => {
+      if (celebrationTimerRef.current !== null) {
+        window.clearTimeout(celebrationTimerRef.current);
+      }
+      if (summaryTimerRef.current !== null) {
+        window.clearTimeout(summaryTimerRef.current);
+      }
+    };
+  }, []);
+
   const getClipIndexForTime = useCallback((time: number): number => {
     if (!clips.length) return 0;
     for (let i = 0; i < clips.length; i++) {
@@ -117,6 +158,7 @@ export default function PlayerPage() {
 
     if (!clips.length || !instance) {
       setCurrentTime(time);
+      setClipWatchProgress(0);
       return;
     }
 
@@ -139,6 +181,7 @@ export default function PlayerPage() {
       }
       prevClipRef.current = clipIdx;
       setActiveClipIndex(clipIdx);
+      setClipWatchProgress(0);
     }
 
     const clip = clips[clipIdx];
@@ -152,13 +195,15 @@ export default function PlayerPage() {
 
     const timeInClip = time - clip.startTime;
     tracker.update(timeInClip);
+    setClipWatchProgress(tracker.getProgress());
 
     if (tracker.isComplete() && !countedRef.current.has(clipIdx)) {
       countedRef.current.add(clipIdx);
       updateClip(instance.id, clipIdx, { watchCount: clip.watchCount + 1 });
+      triggerCelebration(clipIdx);
       if (!clip.summary.trim()) {
         playerRef.current?.pause();
-        openSummary(clipIdx);
+        openSummaryAfterCelebration(clipIdx);
       }
     }
   }
@@ -183,6 +228,7 @@ export default function PlayerPage() {
     // Reset the new clip's tracker so it starts fresh from this seek
     trackersRef.current.delete(newClipIdx);
     countedRef.current.delete(newClipIdx);
+    setClipWatchProgress(0);
 
     // Suppress stale time updates while seeking
     seekingRef.current = true;
@@ -234,6 +280,8 @@ export default function PlayerPage() {
   const summarizedCount = clips.filter(c => c.summary).length;
   const summaryRequiredClip = clips[activeClipIndex];
   const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
+  const currentClip = clips[activeClipIndex];
+  const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipWatchProgress)) * 100);
 
   return (
     <div className="player-page">
@@ -302,6 +350,24 @@ export default function PlayerPage() {
           />
         )}
 
+        {currentClip && (
+          <div className="clip-progress-panel" aria-label={`Current clip progress ${clipProgressPct}%`}>
+            <div className="clip-progress-row">
+              <span>Clip progress</span>
+              <span>{clipProgressPct}%</span>
+            </div>
+            <div className="clip-progress-track">
+              <div
+                className="clip-progress-fill"
+                style={{ width: `${clipProgressPct}%` }}
+              />
+            </div>
+            <div className="clip-progress-meta">
+              Clip {activeClipIndex + 1}: {formatTime(currentClip.startTime)} - {formatTime(currentClip.endTime)}
+            </div>
+          </div>
+        )}
+
         <div className="player-controls-row">
           <div className="time-display">
             {formatTime(currentTime)} / {formatTime(duration)}
@@ -329,6 +395,17 @@ export default function PlayerPage() {
           onSave={handleSaveSummary}
           onClose={() => setShowSummary(false)}
         />
+      )}
+
+      {celebration && (
+        <div key={celebration.key} className="clip-celebration" aria-live="polite">
+          <div className="celebration-burst" />
+          <div className="celebration-card">
+            <span className="celebration-kicker">Clip {celebration.clipNumber} complete</span>
+            <strong>Nice work!</strong>
+            <span>Keep the streak going.</span>
+          </div>
+        </div>
       )}
     </div>
   );
