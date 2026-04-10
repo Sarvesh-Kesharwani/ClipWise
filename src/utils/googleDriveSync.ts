@@ -51,6 +51,13 @@ declare global {
   }
 }
 
+export class TokenExpiredError extends Error {
+  constructor() {
+    super('Google access token expired.');
+    this.name = 'TokenExpiredError';
+  }
+}
+
 export function getGoogleClientId(): string {
   return import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
 }
@@ -192,6 +199,9 @@ async function driveFetch(accessToken: string, input: RequestInfo | URL, init: R
 
   const response = await fetch(input, { ...init, headers });
   if (!response.ok) {
+    if (response.status === 401) {
+      throw new TokenExpiredError();
+    }
     const errorText = await response.text();
     throw new Error(errorText || `Google Drive request failed with ${response.status}.`);
   }

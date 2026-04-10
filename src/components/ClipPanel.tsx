@@ -1,5 +1,5 @@
 import type { Clip } from '../types';
-import { formatTime, getClipStatus, getClipStatusColor, getClipStatusLabel } from '../utils/helpers';
+import { formatTime, getClipStatus, getClipStatusLabel } from '../utils/helpers';
 
 interface Props {
   clips: Clip[];
@@ -35,7 +35,6 @@ export default function ClipPanel({ clips, activeClipIndex, lockedClipIndex, onC
       <div className="clip-grid">
         {clips.map(clip => {
           const status = getClipStatus(clip);
-          const color = getClipStatusColor(status);
           const isActive = clip.index === activeClipIndex;
           const hasWatch = clip.watchCount > 0;
           const isBlockedByLock = hasSummaryLock && clip.index !== lockedClipIndex;
@@ -44,9 +43,16 @@ export default function ClipPanel({ clips, activeClipIndex, lockedClipIndex, onC
           return (
             <div
               key={clip.index}
+              role="button"
+              tabIndex={0}
               className={`clip-card ${status} ${isActive ? 'active' : ''} ${isBlockedByLock ? 'blocked' : ''}`}
-              style={{ backgroundColor: color }}
               onClick={() => onClipClick(clip.index)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onClipClick(clip.index);
+                }
+              }}
               title={isBlockedByLock ? 'Save the current clip summary before switching' : getClipStatusLabel(status)}
             >
               <div className="clip-card-top">

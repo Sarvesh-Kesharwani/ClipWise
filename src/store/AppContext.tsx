@@ -12,6 +12,7 @@ import {
   requestGoogleDriveToken,
   revokeGoogleDriveToken,
   saveSyncPayload,
+  TokenExpiredError,
 } from '../utils/googleDriveSync';
 const GOOGLE_CLIENT_ID = getGoogleClientId();
 
@@ -117,8 +118,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [setDataWithLocalChange]);
 
+  const refreshToken = useCallback(async (): Promise<string | null> => {
+    try {
+      const newToken = await requestGoogleDriveToken(GOOGLE_CLIENT_ID);
+      accessTokenRef.current = newToken;
+      return newToken;
+    } catch {
+      accessTokenRef.current = null;
+      setCloudSync(prev => ({
+        ...prev,
+        isSignedIn: false,
+        status: 'error',
+        message: 'Session expired. Please sign in again.',
+      }));
+      return null;
+    }
+  }, []);
+
   const syncToGoogleDrive = useCallback(async () => {
-    const token = accessTokenRef.current;
+    let token = accessTokenRef.current;
     if (!token) {
       setCloudSync(prev => ({ ...prev, status: 'error', message: 'Sign in with Google before syncing.' }));
       return;
@@ -126,36 +144,44 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setCloudSync(prev => ({ ...prev, status: 'syncing', message: 'Saving to Google Drive...' }));
 
-    try {
-      let fileId = syncFileIdRef.current;
-      if (!fileId) {
-        const existingFile = await findSyncFile(token);
-        fileId = existingFile?.id ?? null;
-        syncFileIdRef.current = fileId;
-      }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        let fileId = syncFileIdRef.current;
+        if (!fileId) {
+          const existingFile = await findSyncFile(token);
+          fileId = existingFile?.id ?? null;
+          syncFileIdRef.current = fileId;
+        }
 
-      const payload = createDrivePayload(dataRef.current, dataUpdatedAtRef.current);
-      const savedFile = await saveSyncPayload(token, payload, fileId);
-      syncFileIdRef.current = savedFile.id;
-      lastCloudSavedAtRef.current = payload.savedAt;
-      setCloudSync(prev => ({
-        ...prev,
-        fileId: savedFile.id,
-        status: 'idle',
-        message: 'Saved to Google Drive.',
-        lastSyncedAt: Date.now(),
-      }));
-    } catch (error) {
-      setCloudSync(prev => ({
-        ...prev,
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Google Drive sync failed.',
-      }));
+        const payload = createDrivePayload(dataRef.current, dataUpdatedAtRef.current);
+        const savedFile = await saveSyncPayload(token, payload, fileId);
+        syncFileIdRef.current = savedFile.id;
+        lastCloudSavedAtRef.current = payload.savedAt;
+        setCloudSync(prev => ({
+          ...prev,
+          fileId: savedFile.id,
+          status: 'idle',
+          message: 'Saved to Google Drive.',
+          lastSyncedAt: Date.now(),
+        }));
+        return;
+      } catch (error) {
+        if (error instanceof TokenExpiredError && attempt === 0) {
+          const newToken = await refreshToken();
+          if (newToken) { token = newToken; continue; }
+        }
+        setCloudSync(prev => ({
+          ...prev,
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Google Drive sync failed.',
+        }));
+        return;
+      }
     }
-  }, []);
+  }, [refreshToken]);
 
   const loadFromGoogleDrive = useCallback(async () => {
-    const token = accessTokenRef.current;
+    let token = accessTokenRef.current;
     if (!token) {
       setCloudSync(prev => ({ ...prev, status: 'error', message: 'Sign in with Google before loading from Drive.' }));
       return;
@@ -163,44 +189,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setCloudSync(prev => ({ ...prev, status: 'loading', message: 'Loading from Google Drive...' }));
 
-    try {
-      const file = syncFileIdRef.current
-        ? { id: syncFileIdRef.current }
-        : await findSyncFile(token);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const file = syncFileIdRef.current
+          ? { id: syncFileIdRef.current }
+          : await findSyncFile(token);
 
-      if (!file) {
+        if (!file) {
+          setCloudSync(prev => ({
+            ...prev,
+            status: 'idle',
+            message: 'No ClipWise cloud backup found yet.',
+            lastSyncedAt: null,
+          }));
+          return;
+        }
+
+        const payload = await downloadSyncPayload(token, file.id);
+        if (!payload) throw new Error('The Google Drive backup was not a valid ClipWise backup.');
+
+        syncFileIdRef.current = file.id;
+        lastCloudSavedAtRef.current = payload.savedAt;
+        setData(payload.data);
+        setDataUpdatedAt(payload.savedAt);
         setCloudSync(prev => ({
           ...prev,
+          isSignedIn: true,
+          fileId: file.id,
           status: 'idle',
-          message: 'No ClipWise cloud backup found yet.',
-          lastSyncedAt: null,
+          message: 'Loaded settings and video details from Google Drive.',
+          lastSyncedAt: Date.now(),
+        }));
+        return;
+      } catch (error) {
+        if (error instanceof TokenExpiredError && attempt === 0) {
+          const newToken = await refreshToken();
+          if (newToken) { token = newToken; continue; }
+        }
+        setCloudSync(prev => ({
+          ...prev,
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Could not load from Google Drive.',
         }));
         return;
       }
-
-      const payload = await downloadSyncPayload(token, file.id);
-      if (!payload) throw new Error('The Google Drive backup was not a valid ClipWise backup.');
-
-      syncFileIdRef.current = file.id;
-      lastCloudSavedAtRef.current = payload.savedAt;
-      setData(payload.data);
-      setDataUpdatedAt(payload.savedAt);
-      setCloudSync(prev => ({
-        ...prev,
-        isSignedIn: true,
-        fileId: file.id,
-        status: 'idle',
-        message: 'Loaded settings and video details from Google Drive.',
-        lastSyncedAt: Date.now(),
-      }));
-    } catch (error) {
-      setCloudSync(prev => ({
-        ...prev,
-        status: 'error',
-        message: error instanceof Error ? error.message : 'Could not load from Google Drive.',
-      }));
     }
-  }, []);
+  }, [refreshToken]);
 
   const signInWithGoogle = useCallback(async () => {
     setCloudSync(prev => ({ ...prev, status: 'signing-in', message: 'Opening Google sign-in...' }));
