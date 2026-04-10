@@ -49,7 +49,7 @@ export function getClipStatusLabel(status: ClipStatus): string {
   switch (status) {
     case 'unwatched': return 'Not watched';
     case 'watched': return 'Watched';
-    case 'summarized': return 'Summarized';
+    case 'summarized': return 'Summary';
     case 'rewatched-2': return 'Watched 2x';
     case 'rewatched-3plus': return 'Watched 3x+';
   }

@@ -10,9 +10,11 @@ interface Props {
 
 export default function SummaryModal({ clip, onSave, onClose }: Props) {
   const [text, setText] = useState(clip.summary);
+  const trimmedText = text.trim();
 
   function handleSave() {
-    onSave(text.trim());
+    if (!trimmedText) return;
+    onSave(trimmedText);
   }
 
   return (
@@ -37,7 +39,7 @@ export default function SummaryModal({ clip, onSave, onClose }: Props) {
         />
         <div className="form-actions">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
-          <button className="btn-primary" onClick={handleSave}>
+          <button className="btn-primary" onClick={handleSave} disabled={!trimmedText}>
             {clip.summary ? 'Update' : 'Save'} Summary
           </button>
         </div>

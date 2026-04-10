@@ -849,6 +849,15 @@ input, textarea {
   z-index: 2;
   box-shadow: var(--shadow-md);
 }
+.clip-card.blocked {
+  cursor: not-allowed;
+  filter: grayscale(0.35);
+  opacity: 0.65;
+}
+.clip-card.blocked:hover {
+  transform: none;
+  box-shadow: none;
+}
 .clip-card.active {
   border-color: white;
   box-shadow: 0 0 0 3px var(--green), 0 0 16px rgba(88, 204, 2, 0.3);
@@ -967,6 +976,9 @@ input, textarea {
 .segmented-bar:hover {
   height: 18px;
   border-radius: 9px;
+}
+.segmented-bar.locked {
+  cursor: not-allowed;
 }
 
 .bar-segment {

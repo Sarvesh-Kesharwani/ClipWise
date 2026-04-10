@@ -6,10 +6,11 @@ interface Props {
   clips: Clip[];
   currentTime: number;
   duration: number;
+  lockedClipIndex: number | null;
   onSeek: (time: number) => void;
 }
 
-export default function SegmentedProgressBar({ clips, currentTime, duration, onSeek }: Props) {
+export default function SegmentedProgressBar({ clips, currentTime, duration, lockedClipIndex, onSeek }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
 
   function handleClick(e: React.MouseEvent) {
@@ -23,7 +24,12 @@ export default function SegmentedProgressBar({ clips, currentTime, duration, onS
 
   return (
     <div className="segmented-bar-wrapper">
-      <div className="segmented-bar" ref={barRef} onClick={handleClick}>
+      <div
+        className={`segmented-bar ${lockedClipIndex !== null ? 'locked' : ''}`}
+        ref={barRef}
+        onClick={handleClick}
+        title={lockedClipIndex !== null ? 'Save the current clip summary before switching clips' : undefined}
+      >
         {clips.map(clip => {
           const status = getClipStatus(clip);
           const color = getClipStatusColor(status);

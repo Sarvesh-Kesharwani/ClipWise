@@ -44,7 +44,7 @@ export default function VideoCard({ video, instances, onClick }: Props) {
             </div>
             <div className="card-stats">
               <span className="stat watched">{watchedClips}/{totalClips} watched</span>
-              <span className="stat summarized">{summarizedClips}/{totalClips} noted</span>
+              <span className="stat summarized">{summarizedClips}/{totalClips} summaries</span>
             </div>
           </>
         )}

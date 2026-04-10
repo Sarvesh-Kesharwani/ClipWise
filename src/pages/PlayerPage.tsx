@@ -6,7 +6,7 @@ import YouTubePlayer from '../components/YouTubePlayer';
 import ClipPanel from '../components/ClipPanel';
 import SegmentedProgressBar from '../components/SegmentedProgressBar';
 import SummaryModal from '../components/SummaryModal';
-import type { PlayerRef } from '../types';
+import type { Clip, PlayerRef } from '../types';
 import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
 import { formatTime } from '../utils/helpers';
@@ -35,6 +35,37 @@ export default function PlayerPage() {
   const seekingRef = useRef(false);
 
   const clips = instance?.clips || [];
+
+  function needsSummary(clip: Clip | undefined): clip is Clip {
+    return Boolean(clip && clip.watchCount > 0 && !clip.summary.trim());
+  }
+
+  function openSummary(clipIndex: number) {
+    setSummaryClipIndex(clipIndex);
+    setShowSummary(true);
+  }
+
+  function requireSummaryBeforeLeaving(fromClipIndex: number, toClipIndex: number): boolean {
+    if (fromClipIndex === toClipIndex) return false;
+
+    const fromClip = clips[fromClipIndex];
+    if (!needsSummary(fromClip)) return false;
+
+    playerRef.current?.pause();
+    openSummary(fromClip.index);
+    return true;
+  }
+
+  function keepPlayerInClip(clip: Clip) {
+    const lockedTime = Math.max(clip.startTime, clip.endTime - 0.25);
+
+    seekingRef.current = true;
+    setCurrentTime(lockedTime);
+    playerRef.current?.seek(lockedTime);
+    playerRef.current?.pause();
+
+    setTimeout(() => { seekingRef.current = false; }, 500);
+  }
 
   // Load local video file from IndexedDB
   useEffect(() => {
@@ -80,15 +111,25 @@ export default function PlayerPage() {
     return clips.length - 1;
   }, [clips]);
 
-  const handleTimeUpdate = useCallback((time: number) => {
+  function handleTimeUpdate(time: number) {
     // Skip stale time updates that arrive during a pending seek
     if (seekingRef.current) return;
 
-    setCurrentTime(time);
-
-    if (!clips.length || !instance) return;
+    if (!clips.length || !instance) {
+      setCurrentTime(time);
+      return;
+    }
 
     const clipIdx = getClipIndexForTime(time);
+    const previousClipIdx = prevClipRef.current;
+
+    if (previousClipIdx >= 0 && requireSummaryBeforeLeaving(previousClipIdx, clipIdx)) {
+      const previousClip = clips[previousClipIdx];
+      if (previousClip) keepPlayerInClip(previousClip);
+      return;
+    }
+
+    setCurrentTime(time);
 
     // Clip changed — reset tracker for new clip
     if (clipIdx !== prevClipRef.current) {
@@ -115,8 +156,12 @@ export default function PlayerPage() {
     if (tracker.isComplete() && !countedRef.current.has(clipIdx)) {
       countedRef.current.add(clipIdx);
       updateClip(instance.id, clipIdx, { watchCount: clip.watchCount + 1 });
+      if (!clip.summary.trim()) {
+        playerRef.current?.pause();
+        openSummary(clipIdx);
+      }
     }
-  }, [clips, instance, getClipIndexForTime, updateClip]);
+  }
 
   function handleReady(dur: number) {
     setDuration(dur);
@@ -125,6 +170,8 @@ export default function PlayerPage() {
   function seekToTime(time: number) {
     // Reset tracker state for the new position so tracking starts fresh
     const newClipIdx = getClipIndexForTime(time);
+    if (requireSummaryBeforeLeaving(activeClipIndex, newClipIdx)) return;
+
     if (newClipIdx !== prevClipRef.current) {
       if (prevClipRef.current >= 0) {
         trackersRef.current.delete(prevClipRef.current);
@@ -158,11 +205,6 @@ export default function PlayerPage() {
     seekToTime(time);
   }
 
-  function openSummary(clipIndex: number) {
-    setSummaryClipIndex(clipIndex);
-    setShowSummary(true);
-  }
-
   function handleSaveSummary(text: string) {
     if (summaryClipIndex >= 0 && instance) {
       updateClip(instance.id, summaryClipIndex, { summary: text });
@@ -190,6 +232,8 @@ export default function PlayerPage() {
 
   const watchedCount = clips.filter(c => c.watchCount > 0).length;
   const summarizedCount = clips.filter(c => c.summary).length;
+  const summaryRequiredClip = clips[activeClipIndex];
+  const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
 
   return (
     <div className="player-page">
@@ -210,13 +254,14 @@ export default function PlayerPage() {
               />
             </div>
             <span className="overall-text">
-              {watchedCount}/{clips.length} watched · {summarizedCount}/{clips.length} noted
+              {watchedCount}/{clips.length} watched · {summarizedCount}/{clips.length} summaries
             </span>
           </div>
         )}
         <ClipPanel
           clips={clips}
           activeClipIndex={activeClipIndex}
+          lockedClipIndex={summaryRequiredClipIndex}
           onClipClick={handleSeekToClip}
           onSummaryClick={openSummary}
         />
@@ -252,6 +297,7 @@ export default function PlayerPage() {
             clips={clips}
             currentTime={currentTime}
             duration={duration}
+            lockedClipIndex={summaryRequiredClipIndex}
             onSeek={handleSeek}
           />
         )}
@@ -272,7 +318,7 @@ export default function PlayerPage() {
 
         {clips[activeClipIndex] && clips[activeClipIndex].summary && (
           <div className="current-clip-summary">
-            <strong>Clip {activeClipIndex + 1} note:</strong> {clips[activeClipIndex].summary}
+            <strong>Clip {activeClipIndex + 1} summary:</strong> {clips[activeClipIndex].summary}
           </div>
         )}
       </div>

@@ -4,13 +4,15 @@ import { formatTime, getClipStatus, getClipStatusColor, getClipStatusLabel } fro
 interface Props {
   clips: Clip[];
   activeClipIndex: number;
+  lockedClipIndex: number | null;
   onClipClick: (index: number) => void;
   onSummaryClick: (index: number) => void;
 }
 
-export default function ClipPanel({ clips, activeClipIndex, onClipClick, onSummaryClick }: Props) {
+export default function ClipPanel({ clips, activeClipIndex, lockedClipIndex, onClipClick, onSummaryClick }: Props) {
   const watched = clips.filter(c => c.watchCount > 0).length;
   const summarized = clips.filter(c => c.summary).length;
+  const hasSummaryLock = lockedClipIndex !== null;
 
   return (
     <div className="clip-panel">
@@ -18,14 +20,14 @@ export default function ClipPanel({ clips, activeClipIndex, onClipClick, onSumma
         <h3>Clips</h3>
         <div className="clip-stats">
           <span className="stat-watched">{watched}/{clips.length} watched</span>
-          <span className="stat-summarized">{summarized}/{clips.length} noted</span>
+          <span className="stat-summarized">{summarized}/{clips.length} summaries</span>
         </div>
       </div>
 
       <div className="clip-legend">
         <span className="legend-item"><span className="dot" style={{ background: '#FF4B4B' }} /> New</span>
         <span className="legend-item"><span className="dot" style={{ background: '#FFC800' }} /> Watched</span>
-        <span className="legend-item"><span className="dot" style={{ background: '#58CC02' }} /> Noted</span>
+        <span className="legend-item"><span className="dot" style={{ background: '#58CC02' }} /> Summary</span>
         <span className="legend-item"><span className="dot" style={{ background: '#1CB0F6' }} /> 2x</span>
         <span className="legend-item"><span className="dot" style={{ background: '#CE82FF' }} /> 3x+</span>
       </div>
@@ -36,14 +38,16 @@ export default function ClipPanel({ clips, activeClipIndex, onClipClick, onSumma
           const color = getClipStatusColor(status);
           const isActive = clip.index === activeClipIndex;
           const hasWatch = clip.watchCount > 0;
+          const isBlockedByLock = hasSummaryLock && clip.index !== lockedClipIndex;
+          const summaryTargetIndex = isBlockedByLock && lockedClipIndex !== null ? lockedClipIndex : clip.index;
 
           return (
             <div
               key={clip.index}
-              className={`clip-card ${status} ${isActive ? 'active' : ''}`}
+              className={`clip-card ${status} ${isActive ? 'active' : ''} ${isBlockedByLock ? 'blocked' : ''}`}
               style={{ backgroundColor: color }}
               onClick={() => onClipClick(clip.index)}
-              title={getClipStatusLabel(status)}
+              title={isBlockedByLock ? 'Save the current clip summary before switching' : getClipStatusLabel(status)}
             >
               <div className="clip-card-top">
                 <span className="clip-number">#{clip.index + 1}</span>
@@ -58,8 +62,8 @@ export default function ClipPanel({ clips, activeClipIndex, onClipClick, onSumma
                 {hasWatch && (
                   <button
                     className={`summary-btn ${clip.summary ? 'has-summary' : ''}`}
-                    onClick={(e) => { e.stopPropagation(); onSummaryClick(clip.index); }}
-                    title={clip.summary || 'Add summary'}
+                    onClick={(e) => { e.stopPropagation(); onSummaryClick(summaryTargetIndex); }}
+                    title={isBlockedByLock ? 'Save the current clip summary first' : clip.summary || 'Add summary'}
                   >
                     {clip.summary ? '📝' : '✏️'}
                   </button>
