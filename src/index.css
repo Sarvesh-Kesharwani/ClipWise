@@ -515,7 +515,7 @@ input, textarea {
   position: absolute;
   top: 0;
   right: 0;
-  width: min(380px, 36vw);
+  width: min(480px, 46vw);
   z-index: 3;
 }
 
@@ -544,6 +544,7 @@ input, textarea {
 .dashboard-actions {
   display: flex;
   justify-content: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 24px;
 }
@@ -556,6 +557,11 @@ input, textarea {
 .btn-add-folder {
   font-size: 15px;
   padding: 12px 24px;
+}
+
+.watch-mix-btn {
+  background: var(--blue);
+  border-bottom-color: var(--blue-dark);
 }
 
 /* ===== Folder List ===== */
@@ -704,6 +710,15 @@ input, textarea {
   padding: 24px 0;
 }
 
+.remix-folder {
+  border-color: rgba(28, 176, 246, 0.35);
+  border-bottom-color: var(--blue-dark);
+}
+
+.remix-folder-header {
+  background: linear-gradient(90deg, rgba(28, 176, 246, 0.12), rgba(88, 204, 2, 0.08));
+}
+
 /* ===== Folder Picker in Modal ===== */
 .folder-picker {
   display: flex;
@@ -723,6 +738,151 @@ input, textarea {
   font-size: 14px;
 }
 
+/* ===== Watch Mix Modal ===== */
+.watch-mix-modal {
+  max-width: 560px;
+}
+
+.mix-count-row {
+  display: grid;
+  grid-template-columns: 1fr 110px auto;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+}
+.mix-count-row label {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+.mix-count-row span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.mix-source-list {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-bottom: 12px;
+}
+
+.mix-selection-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.mix-selection-copy {
+  display: grid;
+  gap: 2px;
+}
+.mix-selection-copy strong {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.mix-selection-copy span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue-dark);
+}
+
+.mix-selection-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mix-selection-btn {
+  padding: 8px 12px;
+  font-size: 11px;
+  border-radius: 8px;
+}
+
+.mix-source-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  background: var(--surface);
+  color: var(--text);
+  border: 2px solid var(--border);
+  border-bottom: 4px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.15s ease, transform 0.12s ease, background 0.15s ease;
+}
+.mix-source-option:hover {
+  border-color: var(--blue);
+  background: rgba(28, 176, 246, 0.06);
+}
+.mix-source-option:active {
+  transform: translateY(2px);
+  border-bottom-width: 2px;
+}
+.mix-source-option.selected {
+  border-color: var(--blue);
+  border-bottom-color: var(--blue-dark);
+  background: rgba(28, 176, 246, 0.1);
+}
+.mix-source-option.disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+  filter: grayscale(0.15);
+}
+.mix-source-option.disabled:hover {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+.mix-source-check {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: var(--border);
+  color: var(--blue-dark);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.mix-source-option.selected .mix-source-check {
+  background: var(--blue);
+  color: white;
+}
+.mix-source-option.disabled .mix-source-check {
+  background: var(--border);
+  color: var(--text-secondary);
+}
+
+.mix-source-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.mix-source-copy strong {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mix-source-copy span {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
 /* ===== Cloud Sync ===== */
 .cloud-sync {
   width: 100%;
@@ -735,7 +895,7 @@ input, textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   text-align: left;
   box-shadow: var(--shadow);
 }
@@ -789,18 +949,19 @@ input, textarea {
 
 .cloud-sync-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
   flex: 0 0 auto;
 }
 
 .cloud-sync-actions .btn-primary,
 .cloud-sync-actions .btn-secondary {
-  padding: 8px 12px;
+  padding: 7px 10px;
   font-size: 11px;
   border-radius: 8px;
   border-bottom-width: 3px;
+  white-space: nowrap;
 }
 
 /* ===== Empty State ===== */
@@ -933,6 +1094,71 @@ input, textarea {
 }
 .stat.watched { color: var(--yellow-dark); }
 .stat.summarized { color: var(--green-dark); }
+
+.remix-card {
+  border-color: rgba(28, 176, 246, 0.35);
+  border-bottom-color: var(--blue-dark);
+}
+
+.remix-thumbnail {
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgba(28, 176, 246, 0.92), rgba(88, 204, 2, 0.78)),
+    var(--blue);
+}
+
+.remix-thumbnail-stack {
+  display: grid;
+  place-items: center;
+  color: white;
+  text-transform: uppercase;
+  font-weight: 900;
+  text-shadow: 0 2px 0 rgba(0,0,0,0.16);
+}
+.remix-thumbnail-stack strong {
+  font-size: 48px;
+  line-height: 1;
+}
+.remix-thumbnail-stack span {
+  font-size: 13px;
+  letter-spacing: 0.5px;
+}
+
+.remix-badge {
+  background: rgba(28, 176, 246, 0.9);
+}
+
+.remix-card-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.remix-card-title-row .card-title {
+  flex: 1;
+}
+
+.remix-delete {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  border: 2px solid var(--border);
+  border-bottom: 3px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 18px;
+  line-height: 1;
+}
+.remix-delete:hover {
+  color: white;
+  background: var(--red);
+  border-color: var(--red-dark);
+}
+
+.remix-progress-fill {
+  background: linear-gradient(90deg, var(--blue), var(--green), var(--yellow));
+}
 
 /* ===== Player Page ===== */
 .player-page {
@@ -1572,6 +1798,89 @@ input, textarea {
   color: var(--green-dark);
 }
 
+/* ===== Remix Player ===== */
+.remix-sidebar {
+  background: linear-gradient(180deg, #FFFFFF 0%, #F7FBFF 100%);
+}
+
+.remix-queue {
+  display: grid;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 0 20px 20px;
+}
+
+.remix-queue-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 11px 12px;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-bottom: 4px solid var(--border);
+  border-radius: 8px;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.remix-queue-item:hover {
+  transform: translateY(-2px);
+  border-color: var(--blue);
+}
+.remix-queue-item.active {
+  border-color: var(--blue);
+  border-bottom-color: var(--blue-dark);
+  background: rgba(28, 176, 246, 0.1);
+}
+.remix-queue-item span {
+  grid-row: span 2;
+  align-self: center;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--blue);
+  color: white;
+  font-weight: 900;
+  font-size: 12px;
+}
+.remix-queue-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.remix-queue-item small {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.remix-now-playing {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+.remix-now-playing span {
+  color: var(--blue-dark);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+.remix-now-playing strong {
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.15;
+}
+.remix-now-playing small {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 /* ===== Summary Modal ===== */
 .summary-modal {
   max-width: 480px;
@@ -1619,6 +1928,7 @@ input, textarea {
   }
   .cloud-sync-actions {
     justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
@@ -1631,6 +1941,19 @@ input, textarea {
   }
   .video-grid {
     grid-template-columns: 1fr;
+  }
+  .mix-count-row {
+    grid-template-columns: 1fr;
+  }
+  .mix-selection-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .mix-selection-actions {
+    width: 100%;
+  }
+  .mix-selection-btn {
+    flex: 1;
   }
   .cloud-sync-actions .btn-primary,
   .cloud-sync-actions .btn-secondary {

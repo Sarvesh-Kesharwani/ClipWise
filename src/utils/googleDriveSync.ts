@@ -82,7 +82,7 @@ export function isDrivePayload(value: unknown): value is DriveSyncPayload {
     && Array.isArray(payload.data?.instances);
 }
 
-export async function requestGoogleDriveToken(clientId: string): Promise<string> {
+export async function requestGoogleDriveToken(clientId: string, silent = false): Promise<string> {
   if (!clientId) {
     throw new Error('Add VITE_GOOGLE_CLIENT_ID to enable Google Drive sync.');
   }
@@ -90,10 +90,11 @@ export async function requestGoogleDriveToken(clientId: string): Promise<string>
   await loadGoogleIdentityScript();
 
   return new Promise((resolve, reject) => {
+    const promptMode = silent ? '' : 'consent';
     const tokenClient = window.google?.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: DRIVE_APPDATA_SCOPE,
-      prompt: 'consent',
+      prompt: promptMode,
       callback: (response) => {
         if (response.error) {
           reject(new Error(response.error_description || response.error));
@@ -110,7 +111,7 @@ export async function requestGoogleDriveToken(clientId: string): Promise<string>
       error_callback: reject,
     });
 
-    tokenClient?.requestAccessToken({ prompt: 'consent' });
+    tokenClient?.requestAccessToken({ prompt: promptMode });
   });
 }
 

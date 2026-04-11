@@ -389,6 +389,64 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, []);
 
+  // Auto-login: try silent token request on page load
+  useEffect(() => {
+    if (!GOOGLE_CLIENT_ID || accessTokenRef.current) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const token = await requestGoogleDriveToken(GOOGLE_CLIENT_ID, true);
+        if (cancelled) return;
+        accessTokenRef.current = token;
+        setCloudSync(prev => ({ ...prev, isSignedIn: true, status: 'syncing', message: 'Auto-syncing with Google Drive...' }));
+
+        const file = await findSyncFile(token);
+        if (cancelled) return;
+        syncFileIdRef.current = file?.id ?? null;
+
+        if (file) {
+          const payload = await downloadSyncPayload(token, file.id);
+          if (cancelled) return;
+          if (payload && payload.savedAt > dataUpdatedAtRef.current) {
+            lastCloudSavedAtRef.current = payload.savedAt;
+            setData(migrateAppData(payload.data));
+            setDataUpdatedAt(payload.savedAt);
+            setCloudSync(prev => ({
+              ...prev,
+              fileId: file.id,
+              status: 'idle',
+              message: 'Loaded latest data from Google Drive.',
+              lastSyncedAt: Date.now(),
+            }));
+            return;
+          }
+        }
+
+        setCloudSync(prev => ({
+          ...prev,
+          status: 'idle',
+          message: 'Signed in to Google Drive.',
+          lastSyncedAt: prev.lastSyncedAt,
+        }));
+      } catch {
+        // Silent login failed (user not previously authorized or popup blocked) — that's fine, stay signed out
+        if (!cancelled) {
+          setCloudSync(prev => ({
+            ...prev,
+            isSignedIn: false,
+            status: 'idle',
+            message: 'Google Drive sync is ready.',
+          }));
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!cloudSync.isSignedIn || !accessTokenRef.current) return;
     if (lastCloudSavedAtRef.current === dataUpdatedAt) return;
