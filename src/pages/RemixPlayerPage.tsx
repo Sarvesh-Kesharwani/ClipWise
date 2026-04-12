@@ -3,11 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../store/useApp';
 import LocalPlayer from '../components/LocalPlayer';
 import YouTubePlayer from '../components/YouTubePlayer';
+import ClipPanel from '../components/ClipPanel';
 import SummaryModal from '../components/SummaryModal';
-import type { Clip, PlayerRef, RemixClipRef, Video, Instance } from '../types';
+import type { Clip, Instance, PlayerRef, RemixClipRef, Video } from '../types';
 import { formatTime } from '../utils/helpers';
 import { getVideoFile } from '../utils/videoDb';
 import { WatchTracker } from '../utils/watchTracker';
+
+const CELEBRATION_DURATION_MS = 1600;
+const SUMMARY_PROMPT_DELAY_MS = 900;
 
 interface RemixItem {
   ref: RemixClipRef;
@@ -21,19 +25,22 @@ export default function RemixPlayerPage() {
   const navigate = useNavigate();
   const { getRemix, getVideo, getInstance, updateClip } = useApp();
   const remix = remixId ? getRemix(remixId) : undefined;
+
   const playerRef = useRef<PlayerRef>(null);
   const trackerRef = useRef<WatchTracker | null>(null);
-  const completedRef = useRef(new Set<string>());
+  const countedRef = useRef(new Set<string>());
+  const celebrationTimerRef = useRef<number | null>(null);
+  const summaryTimerRef = useRef<number | null>(null);
+  const seekingRef = useRef(false);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [videoSrc, setVideoSrc] = useState('');
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(0);
   const [clipProgress, setClipProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
-  const [summaryItem, setSummaryItem] = useState<RemixItem | null>(null);
-  const [celebration, setCelebration] = useState<{ key: number; label: string } | null>(null);
+  const [summaryClipIndex, setSummaryClipIndex] = useState(-1);
+  const [celebration, setCelebration] = useState<{ key: number; clipNumber: number } | null>(null);
 
   const items = useMemo<RemixItem[]>(() => {
     if (!remix) return [];
@@ -48,22 +55,96 @@ export default function RemixPlayerPage() {
   }, [remix, getVideo, getInstance]);
 
   const currentItem = items[currentIndex];
-  const watchedCount = items.filter(item => item.clip.watchCount > 0).length;
-  const overallPct = items.length > 0 ? Math.round((watchedCount / items.length) * 100) : 0;
-  const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipProgress)) * 100);
+  const currentRefId = currentItem?.ref.id;
+  const remixClips = useMemo<Clip[]>(
+    () => items.map((item, index) => ({ ...item.clip, index })),
+    [items],
+  );
+
+  function needsSummary(clip: Clip | undefined): clip is Clip {
+    return Boolean(clip && clip.watchCount > 0 && !clip.summary.trim());
+  }
+
+  function openSummary(index: number) {
+    setSummaryClipIndex(index);
+    setShowSummary(true);
+  }
+
+  function triggerCelebration(index: number) {
+    if (celebrationTimerRef.current !== null) {
+      window.clearTimeout(celebrationTimerRef.current);
+    }
+
+    setCelebration({ key: Date.now(), clipNumber: index + 1 });
+    celebrationTimerRef.current = window.setTimeout(() => {
+      setCelebration(null);
+      celebrationTimerRef.current = null;
+    }, CELEBRATION_DURATION_MS);
+  }
+
+  function openSummaryAfterCelebration(index: number) {
+    if (summaryTimerRef.current !== null) {
+      window.clearTimeout(summaryTimerRef.current);
+    }
+
+    summaryTimerRef.current = window.setTimeout(() => {
+      openSummary(index);
+      summaryTimerRef.current = null;
+    }, SUMMARY_PROMPT_DELAY_MS);
+  }
+
+  function requireSummaryBeforeLeaving(fromIndex: number, toIndex: number): boolean {
+    if (fromIndex === toIndex) return false;
+
+    const fromClip = remixClips[fromIndex];
+    if (!needsSummary(fromClip)) return false;
+
+    playerRef.current?.pause();
+    openSummary(fromIndex);
+    return true;
+  }
+
+  function seekToRemixIndex(index: number) {
+    const nextItem = items[index];
+    if (!nextItem) return;
+    if (requireSummaryBeforeLeaving(currentIndex, index)) return;
+
+    seekingRef.current = true;
+    setCurrentIndex(index);
+    setClipProgress(0);
+    setIsPlaying(false);
+
+    window.setTimeout(() => {
+      seekingRef.current = false;
+    }, 250);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (celebrationTimerRef.current !== null) {
+        window.clearTimeout(celebrationTimerRef.current);
+      }
+      if (summaryTimerRef.current !== null) {
+        window.clearTimeout(summaryTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentItem) return;
 
     let objectUrl = '';
     let cancelled = false;
+    countedRef.current.delete(currentItem.ref.id);
+    trackerRef.current = new WatchTracker(currentItem.clip.duration);
+
     queueMicrotask(() => {
       if (cancelled) return;
       setLoading(true);
-      setCurrentTime(currentItem.clip.startTime);
       setClipProgress(0);
+      setShowSummary(false);
+      setSummaryClipIndex(-1);
     });
-    trackerRef.current = new WatchTracker(currentItem.clip.duration);
 
     if (currentItem.video.source === 'local') {
       getVideoFile(currentItem.video.id).then(file => {
@@ -89,68 +170,49 @@ export default function RemixPlayerPage() {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [currentItem]);
+  }, [currentRefId, currentItem]);
 
-  function showClipCelebration(item: RemixItem) {
-    setCelebration({ key: Date.now(), label: `${item.video.title} clip ${item.clip.index + 1}` });
-    window.setTimeout(() => setCelebration(null), 1300);
-  }
+  function completeCurrentClip(item: RemixItem, index: number) {
+    if (countedRef.current.has(item.ref.id)) return;
 
-  function completeCurrentClip(item: RemixItem) {
-    const completionKey = item.ref.id;
-    if (completedRef.current.has(completionKey)) return;
-
-    completedRef.current.add(completionKey);
+    countedRef.current.add(item.ref.id);
     updateClip(item.instance.id, item.clip.index, { watchCount: item.clip.watchCount + 1 });
     setClipProgress(1);
-    showClipCelebration(item);
+    triggerCelebration(index);
 
     if (!item.clip.summary.trim()) {
       playerRef.current?.pause();
-      setSummaryItem({ ...item, clip: { ...item.clip, watchCount: item.clip.watchCount + 1 } });
-      window.setTimeout(() => setShowSummary(true), 650);
+      openSummaryAfterCelebration(index);
       return;
     }
 
-    window.setTimeout(() => goToNextClip(), 850);
-  }
-
-  function goToNextClip() {
-    setShowSummary(false);
-    setSummaryItem(null);
-    setIsPlaying(false);
-    setCurrentIndex(prev => Math.min(prev + 1, Math.max(items.length - 1, 0)));
-  }
-
-  function goToPreviousClip() {
-    setShowSummary(false);
-    setSummaryItem(null);
-    setIsPlaying(false);
-    setCurrentIndex(prev => Math.max(prev - 1, 0));
+    if (index < items.length - 1) {
+      window.setTimeout(() => {
+        seekToRemixIndex(index + 1);
+      }, 850);
+    }
   }
 
   function handleReady() {
     if (!currentItem) return;
-    setCurrentTime(currentItem.clip.startTime);
     playerRef.current?.seek(currentItem.clip.startTime);
     window.setTimeout(() => playerRef.current?.play(), 120);
   }
 
   function handleTimeUpdate(time: number) {
-    if (!currentItem) return;
+    if (!currentItem || seekingRef.current) return;
 
     if (time < currentItem.clip.startTime - 0.5) {
       playerRef.current?.seek(currentItem.clip.startTime);
       return;
     }
 
-    setCurrentTime(time);
     const timeInClip = Math.max(0, Math.min(currentItem.clip.duration, time - currentItem.clip.startTime));
     trackerRef.current?.update(timeInClip);
     setClipProgress(trackerRef.current?.getProgress() ?? 0);
 
     if (trackerRef.current?.isComplete()) {
-      completeCurrentClip(currentItem);
+      completeCurrentClip(currentItem, currentIndex);
       return;
     }
 
@@ -161,12 +223,10 @@ export default function RemixPlayerPage() {
   }
 
   function handleSaveSummary(text: string) {
-    if (summaryItem) {
-      updateClip(summaryItem.instance.id, summaryItem.clip.index, { summary: text });
-    }
+    const summaryItem = items[summaryClipIndex];
+    if (!summaryItem) return;
+    updateClip(summaryItem.instance.id, summaryItem.clip.index, { summary: text });
     setShowSummary(false);
-    setSummaryItem(null);
-    goToNextClip();
   }
 
   if (!remix) {
@@ -196,6 +256,13 @@ export default function RemixPlayerPage() {
     );
   }
 
+  const watchedCount = remixClips.filter(clip => clip.watchCount > 0).length;
+  const summarizedCount = remixClips.filter(clip => clip.summary.trim()).length;
+  const summaryRequiredClip = remixClips[currentIndex];
+  const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
+  const currentClip = remixClips[currentIndex];
+  const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipProgress)) * 100);
+
   return (
     <div className="player-page remix-player-page">
       <aside className="player-sidebar remix-sidebar">
@@ -208,30 +275,26 @@ export default function RemixPlayerPage() {
         </div>
         <div className="sidebar-overall">
           <div className="overall-bar">
-            <div className="overall-fill watched-fill" style={{ width: `${overallPct}%` }} />
+            <div className="overall-fill watched-fill" style={{ width: `${(watchedCount / items.length) * 100}%` }} />
           </div>
-          <span className="overall-text">{watchedCount}/{items.length} source clips watched</span>
+          <span className="overall-text">
+            {watchedCount}/{items.length} watched · {summarizedCount}/{items.length} summaries
+          </span>
         </div>
-        <div className="remix-queue">
-          {items.map((item, index) => (
-            <button
-              key={item.ref.id}
-              className={`remix-queue-item ${index === currentIndex ? 'active' : ''}`}
-              onClick={() => setCurrentIndex(index)}
-            >
-              <span>#{index + 1}</span>
-              <strong>{item.video.title}</strong>
-              <small>{formatTime(item.clip.startTime)} - {formatTime(item.clip.endTime)}</small>
-            </button>
-          ))}
-        </div>
+        <ClipPanel
+          clips={remixClips}
+          activeClipIndex={currentIndex}
+          lockedClipIndex={summaryRequiredClipIndex}
+          onClipClick={seekToRemixIndex}
+          onSummaryClick={openSummary}
+        />
       </aside>
 
       <main className="player-main">
         <div className="remix-now-playing">
           <span>Now playing</span>
           <strong>{currentItem.video.title}</strong>
-          <small>{currentItem.instance.name} - Clip {currentItem.clip.index + 1}</small>
+          <small>{currentItem.instance.name} · Clip {currentItem.clip.index + 1}</small>
         </div>
 
         <div className="player-video-container">
@@ -244,7 +307,7 @@ export default function RemixPlayerPage() {
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onReady={handleReady}
-              onEnded={() => completeCurrentClip(currentItem)}
+              onEnded={() => completeCurrentClip(currentItem, currentIndex)}
             />
           ) : (
             <YouTubePlayer
@@ -255,26 +318,28 @@ export default function RemixPlayerPage() {
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onReady={handleReady}
-              onEnded={() => completeCurrentClip(currentItem)}
+              onEnded={() => completeCurrentClip(currentItem, currentIndex)}
             />
           )}
         </div>
 
-        <div className="clip-progress-panel" aria-label={`Current remix clip progress ${clipProgressPct}%`}>
-          <div className="clip-progress-row">
-            <span>Remix clip progress</span>
-            <span>{clipProgressPct}%</span>
+        {currentClip && (
+          <div className="clip-progress-panel" aria-label={`Current remix clip progress ${clipProgressPct}%`}>
+            <div className="clip-progress-row">
+              <span>Remix clip progress</span>
+              <span>{clipProgressPct}%</span>
+            </div>
+            <div className="clip-progress-track">
+              <div className="clip-progress-fill remix-progress-fill" style={{ width: `${clipProgressPct}%` }} />
+            </div>
+            <div className="clip-progress-meta">
+              Mix clip {currentIndex + 1}: {formatTime(currentClip.startTime)} - {formatTime(currentClip.endTime)}
+            </div>
           </div>
-          <div className="clip-progress-track">
-            <div className="clip-progress-fill remix-progress-fill" style={{ width: `${clipProgressPct}%` }} />
-          </div>
-          <div className="clip-progress-meta">
-            {formatTime(currentTime)} / {formatTime(currentItem.clip.endTime)}
-          </div>
-        </div>
+        )}
 
         <div className="player-controls-row">
-          <button className="btn-secondary" onClick={goToPreviousClip} disabled={currentIndex === 0}>
+          <button className="btn-secondary" onClick={() => seekToRemixIndex(currentIndex - 1)} disabled={currentIndex === 0}>
             Previous
           </button>
           <div className="clip-indicator">
@@ -283,22 +348,25 @@ export default function RemixPlayerPage() {
           </div>
           <button
             className="btn-primary"
-            onClick={goToNextClip}
+            onClick={() => seekToRemixIndex(currentIndex + 1)}
             disabled={currentIndex >= items.length - 1}
           >
             Next
           </button>
         </div>
+
+        {currentItem.clip.summary && (
+          <div className="current-clip-summary">
+            <strong>Clip {currentIndex + 1} summary:</strong> {currentItem.clip.summary}
+          </div>
+        )}
       </main>
 
-      {showSummary && summaryItem && (
+      {showSummary && remixClips[summaryClipIndex] && (
         <SummaryModal
-          clip={summaryItem.clip}
+          clip={remixClips[summaryClipIndex]}
           onSave={handleSaveSummary}
-          onClose={() => {
-            setShowSummary(false);
-            setSummaryItem(null);
-          }}
+          onClose={() => setShowSummary(false)}
         />
       )}
 
@@ -306,9 +374,9 @@ export default function RemixPlayerPage() {
         <div key={celebration.key} className="clip-celebration" aria-live="polite">
           <div className="celebration-burst" />
           <div className="celebration-card">
-            <span className="celebration-kicker">Remix clip complete</span>
+            <span className="celebration-kicker">Remix clip {celebration.clipNumber} complete</span>
             <strong>Nice work!</strong>
-            <span>{celebration.label}</span>
+            <span>Keep the streak going.</span>
           </div>
         </div>
       )}

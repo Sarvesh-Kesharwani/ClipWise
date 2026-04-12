@@ -38,10 +38,10 @@ export default function Dashboard() {
 
   return (
     <div className="dashboard">
+      <div className="dashboard-sync-slot">
+        <GoogleDriveSync />
+      </div>
       <header className="dashboard-header">
-        <div className="dashboard-sync-slot">
-          <GoogleDriveSync />
-        </div>
         <div className="logo">
           <span className="logo-icon">&#127916;</span>
           <h1>ClipWise</h1>

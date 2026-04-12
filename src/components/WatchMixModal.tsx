@@ -25,15 +25,19 @@ export default function WatchMixModal({ onClose, onCreated }: Props) {
       .map(video => {
         const instances = getInstancesForVideo(video.id);
         const readyInstances = instances.filter(instance => instance.clips.length > 0);
-        const clipCount = readyInstances.reduce((sum, instance) => sum + instance.clips.length, 0);
-        const totalDuration = readyInstances.reduce(
-          (sum, instance) => sum + instance.clips.reduce((clipSum, clip) => clipSum + clip.duration, 0),
-          0,
+        // Only count clips that haven't been watched or summarized
+        const unwatchedClips = readyInstances.flatMap(instance =>
+          instance.clips.filter(clip => clip.watchCount === 0 && !clip.summary.trim())
         );
+        const clipCount = unwatchedClips.length;
+        const totalDuration = unwatchedClips.reduce((sum, clip) => sum + clip.duration, 0);
         const selectable = clipCount > 0;
+        const hasAnyClips = readyInstances.some(inst => inst.clips.length > 0);
         const unavailableReason = instances.length === 0
           ? 'Create an instance first.'
-          : 'Open a clip instance once so ClipWise can generate clips.';
+          : hasAnyClips
+            ? 'All clips already watched or summarized.'
+            : 'Open a clip instance once so ClipWise can generate clips.';
         return {
           id: video.id,
           title: video.title,
@@ -93,6 +97,8 @@ export default function WatchMixModal({ onClose, onCreated }: Props) {
     for (const videoId of selectedVideoIds) {
       for (const instance of getInstancesForVideo(videoId)) {
         for (const clip of instance.clips) {
+          // Skip clips that have already been watched or summarized
+          if (clip.watchCount > 0 || clip.summary.trim()) continue;
           pool.push({
             id: generateId(),
             videoId,

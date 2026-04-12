@@ -204,6 +204,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setDataWithLocalChange(prev => ({ ...prev, remixes: [...prev.remixes, remix] }));
   }, [setDataWithLocalChange]);
 
+  const updateRemix = useCallback((remix: Remix) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      remixes: prev.remixes.map(r => r.id === remix.id ? remix : r),
+    }));
+  }, [setDataWithLocalChange]);
+
   const deleteRemix = useCallback((remixId: string) => {
     setDataWithLocalChange(prev => ({
       ...prev,
@@ -444,7 +451,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     })();
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -476,7 +482,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       getInstancesForVideo, getInstance, getVideo,
       generateClips,
       addFolder, renameFolder, deleteFolder, moveVideoToFolder,
-      addRemix, deleteRemix, getRemix,
+      addRemix, updateRemix, deleteRemix, getRemix,
       signInWithGoogle,
       signOutGoogle,
       syncToGoogleDrive,
