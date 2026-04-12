@@ -3,7 +3,7 @@ import type { AppData } from '../types';
 const GOOGLE_IDENTITY_SCRIPT = 'https://accounts.google.com/gsi/client';
 const DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
-const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
+const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
 const SYNC_FILE_NAME = 'clipwise-data.json';
 const SCHEMA_VERSION = 1;
 
@@ -58,6 +58,29 @@ export class TokenExpiredError extends Error {
   }
 }
 
+export interface GoogleUserProfile {
+  name: string;
+  email: string;
+  picture: string;
+}
+
+export async function fetchGoogleUserProfile(accessToken: string): Promise<GoogleUserProfile | null> {
+  try {
+    const response = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return null;
+    const data = await response.json() as { name?: string; email?: string; picture?: string };
+    return {
+      name: data.name ?? '',
+      email: data.email ?? '',
+      picture: data.picture ?? '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function getGoogleClientId(): string {
   return import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
 }
@@ -90,7 +113,11 @@ export async function requestGoogleDriveToken(clientId: string, silent = false):
   await loadGoogleIdentityScript();
 
   return new Promise((resolve, reject) => {
-    const promptMode = silent ? '' : 'consent';
+    // 'none' = silent / no UI (used for token refresh).
+    // ''     = let Google decide — shows account picker only when needed,
+    //          skips consent if already granted.  Using 'consent' would force
+    //          the full consent screen every time.
+    const promptMode = silent ? 'none' : '';
     const tokenClient = window.google?.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: DRIVE_APPDATA_SCOPE,

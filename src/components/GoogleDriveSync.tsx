@@ -1,7 +1,11 @@
 import { useApp } from '../store/useApp';
 import { formatTime } from '../utils/helpers';
 
-export default function GoogleDriveSync() {
+interface Props {
+  compact?: boolean;
+}
+
+export default function GoogleDriveSync({ compact }: Props) {
   const {
     cloudSync,
     signInWithGoogle,
@@ -16,6 +20,54 @@ export default function GoogleDriveSync() {
   const lastSynced = cloudSync.lastSyncedAt
     ? `Last sync ${formatDateTime(cloudSync.lastSyncedAt)}`
     : 'Not synced yet';
+
+  if (compact) {
+    return (
+      <div className="cloud-sync-compact">
+        <p className={`cloud-sync-status ${statusClass}`}>
+          {cloudSync.message}
+        </p>
+        {cloudSync.isSignedIn && (
+          <p className="cloud-sync-meta">{lastSynced}</p>
+        )}
+        <div className="cloud-sync-actions compact-actions">
+          {!cloudSync.isSignedIn ? (
+            <button
+              className="btn-primary"
+              onClick={() => void signInWithGoogle()}
+              disabled={!cloudSync.isConfigured || isBusy}
+            >
+              {cloudSync.status === 'signing-in' ? 'Opening...' : 'Sign in with Google'}
+            </button>
+          ) : (
+            <>
+              <button
+                className="btn-primary"
+                onClick={() => void syncToGoogleDrive()}
+                disabled={isBusy}
+              >
+                {cloudSync.status === 'syncing' ? 'Saving...' : 'Save now'}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => void loadFromGoogleDrive()}
+                disabled={isBusy}
+              >
+                {cloudSync.status === 'loading' ? 'Loading...' : 'Load from Drive'}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => void signOutGoogle()}
+                disabled={isBusy}
+              >
+                Sign out
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section className="cloud-sync" aria-live="polite">
