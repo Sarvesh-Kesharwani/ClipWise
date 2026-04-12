@@ -1,5 +1,64 @@
 # ClipWise - Release Notes
 
+## v1.1.0 - Remix, Cloud Sync, and Deployment Update (2026-04-12)
+
+### Highlights
+
+- Added Google Drive cloud sync for ClipWise data, including saved videos, instances, watch counts, and summaries.
+- Added dashboard folders and drag-and-drop organization for videos.
+- Added Watch Mix so users can create saved remix groups from clips pulled across multiple videos.
+- Added a dedicated remix player that now behaves like the normal clip player, including clip colors, summary editing, summary locking, and progress updates to the original source clips.
+- Added Vercel deployment routing config for production hosting.
+
+---
+
+### New Features
+
+#### Google Drive Cloud Sync
+
+- Sign in with Google to save ClipWise data into the app's private Google Drive app-data storage.
+- Added manual save and load actions, plus automatic sync after local changes.
+- Added token refresh handling and automatic sign-in restore on page load when possible.
+- Moved cloud sync controls into the top-right area of the dashboard for quicker access.
+
+#### Dashboard Organization
+
+- Added folders on the dashboard so videos can be grouped by topic or workflow.
+- Added folder creation, renaming, deletion, and drag-and-drop video moves.
+- Added per-folder progress bars based on watched clip progress.
+
+#### Watch Mix / Remix
+
+- Added a `Watch Mix` flow on the dashboard.
+- Users can create a saved mix from clips selected randomly across multiple source videos.
+- The mix modal now shows all videos, allows multi-select, and clearly marks videos that are not clip-ready yet.
+- Saved mixes appear in a dedicated `Remix` section on the dashboard.
+- Remix cards show watched and summarized progress derived from the original source clips.
+
+#### Remix Player
+
+- Added a dedicated remix player route for saved mixes.
+- Remix clips now behave like normal clip groups:
+  - clip colors match watch/summary state
+  - summary edit button appears when available
+  - current watched-unsummarized clip locks later clips until a summary is saved
+  - progress updates write back to the original source instance clip
+- Remix groups now remain stable after playback instead of removing clips after completion.
+
+#### Player Experience
+
+- Added a current-clip progress bar below playback so users can see how much of the active clip has been completed.
+- Added a completion celebration effect when a clip is fully watched.
+- Updated clip buttons to a more tactile, Duolingo-inspired 3D style.
+
+---
+
+### Deployment
+
+- Added `vercel.json` SPA rewrite support so route-based navigation works correctly on Vercel deployments.
+
+---
+
 ## v1.0.0 - Initial Release (2026-04-10)
 
 ### Overview
