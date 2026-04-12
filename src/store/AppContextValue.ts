@@ -33,6 +33,7 @@ export interface AppContextType {
   deleteFolder: (folderId: string) => void;
   moveVideoToFolder: (videoId: string, folderId: string | null) => void;
   addRemix: (remix: Remix) => void;
+  updateRemix: (remix: Remix) => void;
   deleteRemix: (remixId: string) => void;
   getRemix: (remixId: string) => Remix | undefined;
   signInWithGoogle: () => Promise<void>;

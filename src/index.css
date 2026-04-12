@@ -503,20 +503,15 @@ input, textarea {
   padding: 40px 24px 80px;
 }
 
-.dashboard-header {
-  position: relative;
-  text-align: center;
-  min-height: 128px;
+.dashboard-sync-slot {
+  display: flex;
+  justify-content: flex-end;
   margin-bottom: 12px;
-  padding-top: 10px;
 }
 
-.dashboard-sync-slot {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: min(480px, 46vw);
-  z-index: 3;
+.dashboard-header {
+  text-align: center;
+  margin-bottom: 12px;
 }
 
 .logo {
@@ -886,6 +881,7 @@ input, textarea {
 /* ===== Cloud Sync ===== */
 .cloud-sync {
   width: 100%;
+  max-width: 520px;
   margin: 0;
   padding: 12px 14px;
   background: var(--surface);
@@ -1903,14 +1899,8 @@ input, textarea {
 
 /* ===== Responsive ===== */
 @media (max-width: 900px) {
-  .dashboard-header {
-    min-height: 0;
-    padding-top: 0;
-  }
   .dashboard-sync-slot {
-    position: static;
-    width: 100%;
-    margin-bottom: 18px;
+    justify-content: center;
   }
   .player-sidebar {
     width: 280px;
