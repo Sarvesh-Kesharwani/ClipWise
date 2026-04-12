@@ -10,7 +10,6 @@ interface Props {
   onRename: (folderId: string, name: string) => void;
   onDelete: (folderId: string) => void;
   onMoveVideo: (videoId: string, folderId: string) => void;
-  folderCount: number;
 }
 
 export default function FolderCard({
@@ -21,7 +20,6 @@ export default function FolderCard({
   onRename,
   onDelete,
   onMoveVideo,
-  folderCount,
 }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -50,6 +48,17 @@ export default function FolderCard({
     sum + getInstances(v.id).reduce((s, inst) => s + inst.clips.filter(c => c.watchCount > 0).length, 0), 0
   );
   const folderPct = totalClips > 0 ? Math.round((watchedClips / totalClips) * 100) : 0;
+
+  function handleDeleteFolder() {
+    const hasVideos = videos.length > 0;
+    const message = hasVideos
+      ? `Delete "${folder.name}"? Videos inside it will be moved out of the folder.`
+      : `Delete "${folder.name}"?`;
+
+    if (window.confirm(message)) {
+      onDelete(folder.id);
+    }
+  }
 
   return (
     <div
@@ -97,15 +106,13 @@ export default function FolderCard({
           >
             &#9998;
           </button>
-          {folderCount > 1 && (
-            <button
-              className="folder-action-btn danger"
-              title="Delete folder"
-              onClick={() => onDelete(folder.id)}
-            >
-              &times;
-            </button>
-          )}
+          <button
+            className="folder-action-btn danger"
+            title="Delete folder"
+            onClick={handleDeleteFolder}
+          >
+            &times;
+          </button>
         </div>
       </div>
 

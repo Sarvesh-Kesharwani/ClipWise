@@ -1,15 +1,18 @@
 import { createContext } from 'react';
 import type { Video, Instance, Clip, Folder, Remix } from '../types';
+import type { GoogleUserProfile } from '../utils/googleDriveSync';
 
 export type CloudSyncStatus = 'idle' | 'signing-in' | 'syncing' | 'loading' | 'error';
 
 export interface CloudSyncState {
   isConfigured: boolean;
   isSignedIn: boolean;
+  hasPendingChanges: boolean;
   status: CloudSyncStatus;
   message: string;
   lastSyncedAt: number | null;
   fileId: string | null;
+  userProfile: GoogleUserProfile | null;
 }
 
 export interface AppContextType {
@@ -36,6 +39,7 @@ export interface AppContextType {
   updateRemix: (remix: Remix) => void;
   deleteRemix: (remixId: string) => void;
   getRemix: (remixId: string) => Remix | undefined;
+  resetProgress: () => void;
   signInWithGoogle: () => Promise<void>;
   signOutGoogle: () => Promise<void>;
   syncToGoogleDrive: () => Promise<void>;

@@ -46,6 +46,16 @@ export async function deleteVideoFile(videoId: string): Promise<void> {
   });
 }
 
+export async function clearAllVideoFiles(): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 export function extractVideoMetadata(file: File): Promise<{ duration: number; thumbnail: string }> {
   return new Promise((resolve, reject) => {
     const video = document.createElement('video');
