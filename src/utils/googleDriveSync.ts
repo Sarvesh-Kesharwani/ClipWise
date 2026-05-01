@@ -34,6 +34,7 @@ interface TokenClientConfig {
   client_id: string;
   scope: string;
   prompt?: string;
+  redirect_uri?: string;
   callback: (response: TokenResponse) => void;
   error_callback?: (error: unknown) => void;
 }
@@ -122,9 +123,10 @@ export async function requestGoogleDriveToken(clientId: string, silent = false):
       client_id: clientId,
       scope: DRIVE_APPDATA_SCOPE,
       prompt: promptMode,
+      redirect_uri: window.location.origin,
       callback: (response) => {
         if (response.error) {
-          reject(new Error(response.error_description || response.error));
+          reject(new Error(`${response.error_description || response.error} Origin: ${window.location.origin}. Client ID: ${clientId}`));
           return;
         }
 

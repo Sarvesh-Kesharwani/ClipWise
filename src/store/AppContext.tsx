@@ -69,18 +69,17 @@ function migrateAppData(data: AppData): AppData {
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [storedData] = useState(() => loadStoredAppData());
   const [storedCloudSession] = useState(() => loadCloudSession());
+  const needsInitialDriveRestore = Boolean(GOOGLE_CLIENT_ID && storedCloudSession?.accessToken);
   const [data, setData] = useState<AppData>(() => migrateAppData(storedData.data));
   const [dataUpdatedAt, setDataUpdatedAt] = useState(storedData.updatedAt);
   const [cloudSync, setCloudSync] = useState<CloudSyncState>({
     isConfigured: Boolean(GOOGLE_CLIENT_ID),
     isSignedIn: Boolean(storedCloudSession?.accessToken),
-    hasPendingChanges: Boolean(
-      storedCloudSession?.accessToken
-        && storedData.updatedAt !== (storedCloudSession?.lastSavedDataAt ?? null)
-    ),
-    status: 'idle',
+    hasPendingChanges: false,
+    requiresDriveRestore: needsInitialDriveRestore,
+    status: needsInitialDriveRestore ? 'restoring' : 'idle',
     message: GOOGLE_CLIENT_ID
-      ? (storedCloudSession?.accessToken ? 'Restoring Google Drive sync...' : 'Google Drive sync is ready.')
+      ? (storedCloudSession?.accessToken ? 'Loading Google Drive backup before local edits...' : 'Google Drive sync is ready.')
       : 'Add VITE_GOOGLE_CLIENT_ID to enable Google Drive sync.',
     lastSyncedAt: storedCloudSession?.lastSyncedAt ?? null,
     fileId: storedCloudSession?.fileId ?? null,
@@ -95,6 +94,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const dataRef = React.useRef(data);
   const dataUpdatedAtRef = React.useRef(dataUpdatedAt);
   const cloudSyncRef = React.useRef(cloudSync);
+  const driveRestoreReadyRef = React.useRef(!needsInitialDriveRestore);
+  const autoRestoreStartedRef = React.useRef(false);
 
   useEffect(() => {
     dataRef.current = data;
@@ -113,7 +114,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     lastSavedDataAt?: number | null;
     userProfile?: CloudSyncState['userProfile'];
   } = {}) => {
-    const accessToken = overrides.accessToken ?? accessTokenRef.current;
+    const hasOverride = (key: keyof typeof overrides) =>
+      Object.prototype.hasOwnProperty.call(overrides, key);
+    const accessToken = hasOverride('accessToken') ? overrides.accessToken : accessTokenRef.current;
     if (!accessToken) {
       clearCloudSession();
       return;
@@ -121,14 +124,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     saveCloudSession({
       accessToken,
-      fileId: overrides.fileId ?? syncFileIdRef.current ?? null,
-      lastSyncedAt: overrides.lastSyncedAt ?? cloudSyncRef.current.lastSyncedAt ?? null,
-      lastSavedDataAt: overrides.lastSavedDataAt ?? lastCloudSavedAtRef.current ?? null,
-      userProfile: overrides.userProfile ?? cloudSyncRef.current.userProfile ?? null,
+      fileId: hasOverride('fileId') ? overrides.fileId ?? null : syncFileIdRef.current ?? null,
+      lastSyncedAt: hasOverride('lastSyncedAt')
+        ? overrides.lastSyncedAt ?? null
+        : cloudSyncRef.current.lastSyncedAt ?? null,
+      lastSavedDataAt: hasOverride('lastSavedDataAt')
+        ? overrides.lastSavedDataAt ?? null
+        : lastCloudSavedAtRef.current ?? null,
+      userProfile: hasOverride('userProfile')
+        ? overrides.userProfile ?? null
+        : cloudSyncRef.current.userProfile ?? null,
     });
   }, []);
 
   const setDataWithLocalChange = useCallback((updater: (prev: AppData) => AppData) => {
+    if (!driveRestoreReadyRef.current) return;
     const updatedAt = Date.now();
     setData(prev => updater(prev));
     setDataUpdatedAt(updatedAt);
@@ -373,6 +383,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [setDataWithLocalChange]);
 
   const resetProgress = useCallback(() => {
+    if (!driveRestoreReadyRef.current) return;
     const emptyData: AppData = {
       videos: [],
       instances: [],
@@ -391,6 +402,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Wipe all local data (app data + IndexedDB videos + cloud session).
   // Called on explicit sign-out and when a session expires.
   const clearLocalData = useCallback(() => {
+    driveRestoreReadyRef.current = true;
     clearAppData();
     void clearAllVideoFiles();
     const emptyData: AppData = {
@@ -415,12 +427,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {
       accessTokenRef.current = null;
       syncFileIdRef.current = null;
+      lastCloudSavedAtRef.current = null;
+      driveRestoreReadyRef.current = true;
       clearCloudSession();
       clearLocalData();
       setCloudSync(prev => ({
         ...prev,
         isSignedIn: false,
         hasPendingChanges: false,
+        requiresDriveRestore: false,
         status: 'error',
         message: 'Session expired. Please sign in again.',
         fileId: null,
@@ -432,6 +447,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [persistCloudSession, clearLocalData]);
 
   const syncToGoogleDrive = useCallback(async () => {
+    if (!driveRestoreReadyRef.current || cloudSyncRef.current.requiresDriveRestore) {
+      setCloudSync(prev => ({
+        ...prev,
+        status: 'restoring',
+        message: 'Loading Google Drive backup before saving local changes.',
+      }));
+      return;
+    }
+
     let token = accessTokenRef.current;
     if (!token) {
       setCloudSync(prev => ({ ...prev, status: 'error', message: 'Sign in with Google before syncing.' }));
@@ -464,6 +488,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           fileId: savedFile.id,
           hasPendingChanges: false,
+          requiresDriveRestore: false,
           status: 'idle',
           message: 'Saved to Google Drive.',
           lastSyncedAt: syncedAt,
@@ -473,6 +498,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (error instanceof TokenExpiredError && attempt === 0) {
           const newToken = await refreshToken();
           if (newToken) { token = newToken; continue; }
+          return;
         }
         setCloudSync(prev => ({
           ...prev,
@@ -487,11 +513,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const loadFromGoogleDrive = useCallback(async () => {
     let token = accessTokenRef.current;
     if (!token) {
-      setCloudSync(prev => ({ ...prev, status: 'error', message: 'Sign in with Google before loading from Drive.' }));
+      driveRestoreReadyRef.current = true;
+      setCloudSync(prev => ({
+        ...prev,
+        requiresDriveRestore: false,
+        status: 'error',
+        message: 'Sign in with Google before loading from Drive.',
+      }));
       return;
     }
 
-    setCloudSync(prev => ({ ...prev, status: 'loading', message: 'Loading from Google Drive...' }));
+    driveRestoreReadyRef.current = false;
+    setCloudSync(prev => ({
+      ...prev,
+      hasPendingChanges: false,
+      requiresDriveRestore: true,
+      status: 'loading',
+      message: 'Loading from Google Drive...',
+    }));
 
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -500,6 +539,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           : await findSyncFile(token);
 
         if (!file) {
+          syncFileIdRef.current = null;
+          lastCloudSavedAtRef.current = null;
+          driveRestoreReadyRef.current = true;
           persistCloudSession({
             accessToken: token,
             fileId: null,
@@ -510,9 +552,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ...prev,
             isSignedIn: true,
             hasPendingChanges: true,
+            requiresDriveRestore: false,
             fileId: null,
             status: 'idle',
-            message: 'No ClipWise cloud backup found yet.',
+            message: 'No Drive backup found. Local data can create the first backup now.',
             lastSyncedAt: null,
           }));
           return;
@@ -523,6 +566,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
         syncFileIdRef.current = file.id;
         lastCloudSavedAtRef.current = payload.savedAt;
+        driveRestoreReadyRef.current = true;
         setData(migrateAppData(payload.data));
         setDataUpdatedAt(payload.savedAt);
         const syncedAt = Date.now();
@@ -536,6 +580,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ...prev,
           isSignedIn: true,
           hasPendingChanges: false,
+          requiresDriveRestore: false,
           fileId: file.id,
           status: 'idle',
           message: 'Loaded settings and video details from Google Drive.',
@@ -546,9 +591,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (error instanceof TokenExpiredError && attempt === 0) {
           const newToken = await refreshToken();
           if (newToken) { token = newToken; continue; }
+          return;
         }
         setCloudSync(prev => ({
           ...prev,
+          requiresDriveRestore: true,
           status: 'error',
           message: error instanceof Error ? error.message : 'Could not load from Google Drive.',
         }));
@@ -558,7 +605,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [persistCloudSession, refreshToken]);
 
   const signInWithGoogle = useCallback(async () => {
-    setCloudSync(prev => ({ ...prev, status: 'signing-in', message: 'Opening Google sign-in...' }));
+    driveRestoreReadyRef.current = false;
+    setCloudSync(prev => ({
+      ...prev,
+      hasPendingChanges: false,
+      requiresDriveRestore: true,
+      status: 'signing-in',
+      message: 'Opening Google sign-in...',
+    }));
 
     try {
       const token = await requestGoogleDriveToken(GOOGLE_CLIENT_ID);
@@ -569,7 +623,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         userProfile: profile,
         fileId: syncFileIdRef.current,
       });
-      setCloudSync(prev => ({ ...prev, isSignedIn: true, userProfile: profile, status: 'syncing', message: 'Checking Google Drive...' }));
+      setCloudSync(prev => ({
+        ...prev,
+        isSignedIn: true,
+        userProfile: profile,
+        hasPendingChanges: false,
+        requiresDriveRestore: true,
+        status: 'loading',
+        message: 'Loading Google Drive backup before local edits...',
+      }));
 
       const file = await findSyncFile(token);
       syncFileIdRef.current = file?.id ?? null;
@@ -581,39 +643,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (file) {
         const payload = await downloadSyncPayload(token, file.id);
-        if (payload) {
-          lastCloudSavedAtRef.current = payload.savedAt;
-          setData(migrateAppData(payload.data));
-          setDataUpdatedAt(payload.savedAt);
-          const syncedAt = Date.now();
-          persistCloudSession({
-            accessToken: token,
-            userProfile: profile,
-            fileId: file.id,
-            lastSyncedAt: syncedAt,
-            lastSavedDataAt: payload.savedAt,
-          });
-          setCloudSync(prev => ({
-            ...prev,
-            fileId: file.id,
-            hasPendingChanges: false,
-            status: 'idle',
-            message: 'Loaded data from Google Drive.',
-            lastSyncedAt: syncedAt,
-          }));
-          return;
-        }
+        if (!payload) throw new Error('The Google Drive backup was not a valid ClipWise backup.');
+
+        lastCloudSavedAtRef.current = payload.savedAt;
+        driveRestoreReadyRef.current = true;
+        setData(migrateAppData(payload.data));
+        setDataUpdatedAt(payload.savedAt);
+        const syncedAt = Date.now();
+        persistCloudSession({
+          accessToken: token,
+          userProfile: profile,
+          fileId: file.id,
+          lastSyncedAt: syncedAt,
+          lastSavedDataAt: payload.savedAt,
+        });
+        setCloudSync(prev => ({
+          ...prev,
+          fileId: file.id,
+          hasPendingChanges: false,
+          requiresDriveRestore: false,
+          status: 'idle',
+          message: 'Loaded data from Google Drive.',
+          lastSyncedAt: syncedAt,
+        }));
+        return;
       }
 
-      await syncToGoogleDrive();
+      lastCloudSavedAtRef.current = null;
+      driveRestoreReadyRef.current = true;
+      persistCloudSession({
+        accessToken: token,
+        userProfile: profile,
+        fileId: null,
+        lastSyncedAt: null,
+        lastSavedDataAt: null,
+      });
+      setCloudSync(prev => ({
+        ...prev,
+        fileId: null,
+        hasPendingChanges: true,
+        requiresDriveRestore: false,
+        status: 'idle',
+        message: 'No Drive backup found. Local data can create the first backup now.',
+        lastSyncedAt: null,
+      }));
     } catch (error) {
       accessTokenRef.current = null;
       syncFileIdRef.current = null;
+      lastCloudSavedAtRef.current = null;
+      driveRestoreReadyRef.current = true;
       clearCloudSession();
       setCloudSync(prev => ({
         ...prev,
         isSignedIn: false,
         hasPendingChanges: false,
+        requiresDriveRestore: false,
         status: 'error',
         message: error instanceof Error ? error.message : 'Google sign-in failed.',
         fileId: null,
@@ -621,18 +705,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         userProfile: null,
       }));
     }
-  }, [persistCloudSession, syncToGoogleDrive]);
+  }, [persistCloudSession]);
 
   const signOutGoogle = useCallback(async () => {
     accessTokenRef.current = null;
     syncFileIdRef.current = null;
     lastCloudSavedAtRef.current = null;
+    driveRestoreReadyRef.current = true;
     clearCloudSession();
     clearLocalData();
     setCloudSync(prev => ({
       ...prev,
       isSignedIn: false,
       hasPendingChanges: false,
+      requiresDriveRestore: false,
       status: 'idle',
       message: 'Signed out of Google Drive sync.',
       fileId: null,
@@ -651,23 +737,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!GOOGLE_CLIENT_ID) return;
 
     if (storedCloudSession?.accessToken) {
+      if (autoRestoreStartedRef.current) return;
+      autoRestoreStartedRef.current = true;
       accessTokenRef.current = storedCloudSession.accessToken;
       syncFileIdRef.current = storedCloudSession.fileId ?? null;
       setCloudSync(prev => ({
         ...prev,
         isSignedIn: true,
-        hasPendingChanges: dataUpdatedAtRef.current !== lastCloudSavedAtRef.current,
-        status: 'idle',
-        message: 'Signed in to Google Drive.',
+        hasPendingChanges: false,
+        requiresDriveRestore: true,
+        status: 'restoring',
+        message: 'Loading Google Drive backup before local edits...',
         fileId: storedCloudSession.fileId ?? null,
         lastSyncedAt: storedCloudSession.lastSyncedAt ?? null,
         userProfile: storedCloudSession.userProfile ?? null,
       }));
+      void loadFromGoogleDrive();
     }
     // No stored session → stay signed out, no network call needed
-  }, [storedCloudSession]);
+  }, [loadFromGoogleDrive, storedCloudSession]);
 
   useEffect(() => {
+    if (cloudSync.requiresDriveRestore || !driveRestoreReadyRef.current) {
+      setCloudSync(prev => (
+        prev.hasPendingChanges ? { ...prev, hasPendingChanges: false } : prev
+      ));
+      return;
+    }
+
     const hasPendingChanges = Boolean(
       cloudSync.isSignedIn
       && accessTokenRef.current
@@ -679,10 +776,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? prev
         : { ...prev, hasPendingChanges }
     ));
-  }, [cloudSync.isSignedIn, dataUpdatedAt]);
+  }, [cloudSync.isSignedIn, cloudSync.requiresDriveRestore, dataUpdatedAt]);
 
   useEffect(() => {
     if (!cloudSync.isSignedIn || !accessTokenRef.current) return;
+    if (cloudSync.requiresDriveRestore || !driveRestoreReadyRef.current) return;
     if (lastCloudSavedAtRef.current === dataUpdatedAt) return;
 
     if (autoSyncTimerRef.current) window.clearTimeout(autoSyncTimerRef.current);
@@ -696,7 +794,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         autoSyncTimerRef.current = null;
       }
     };
-  }, [cloudSync.isSignedIn, dataUpdatedAt, syncToGoogleDrive]);
+  }, [cloudSync.isSignedIn, cloudSync.requiresDriveRestore, dataUpdatedAt, syncToGoogleDrive]);
+
+  const showDriveRestoreOverlay = cloudSync.requiresDriveRestore;
 
   return (
     <AppContext.Provider value={{
@@ -724,6 +824,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       loadFromGoogleDrive,
     }}>
       {children}
+      {showDriveRestoreOverlay && (
+        <div className="drive-restore-overlay" role="alertdialog" aria-modal="true" aria-live="assertive">
+          <div className="drive-restore-card">
+            <div className="drive-restore-spinner" aria-hidden="true" />
+            <span className="drive-restore-kicker">Google Drive</span>
+            <h2>Loading Drive backup</h2>
+            <p>{cloudSync.message}</p>
+            <p className="drive-restore-note">
+              Local edits are locked until Drive data is restored.
+            </p>
+            {cloudSync.status === 'error' && (
+              <div className="drive-restore-actions">
+                <button className="btn-primary" onClick={() => void loadFromGoogleDrive()}>
+                  Retry
+                </button>
+                <button className="btn-secondary" onClick={() => void signOutGoogle()}>
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </AppContext.Provider>
   );
 }

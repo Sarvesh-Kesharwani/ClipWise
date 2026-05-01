@@ -1,0 +1,30 @@
+i want you to create a webapp which will allow me to watch videos from local by loading a local folder dir
+or online youtube videos by pasting youtube video link
+
+once video is provvided
+it will show a video player just like youtube's
+the extra feature that it will add over it is, 
+chunking the video into lets say 2 minutes clips.
+the video progress bar will be chunked into these many mins.
+
+basically we are building a video watching progress tracker.
+since watching a long videos like 15mins, 30 mins or hrs, is boring
+chunking them into small pieces and visualing showing user his progress rather than
+making him watch whole long video in a single sit is not efficient and user gives up watching long videos.
+
+on the left side of the video, there will be a tab seperated list of the clips present under a plaing video
+in a grid format, where each cell will show weather its watched or not. if watched how many times. based on the no of times each clip is watched, it's color will change.
+once a user sets the clip size for a video. don't allow user to change the clip size again for that instance. i mean user can create a new object for that video with a new clip size but can't change for existing object. 
+create a home page for the app. where a dashboard will show all the added videos. and its overall progress using some formula.
+and opening any video will first ask which instance of this video to open (diff instance with diff settings like clip_size and all...)
+also allow user to set this clip size in minutes.
+
+- once user completes watching a clip atleast 80% then only mark it as watched, else don't count it.
+initially color of all clip cells should be red.
+once watched, it should change to yellow
+and as user keep increaseting its watch count it should change the color. if watched 2 times, change it to green, for count 3 to blue etc.... 
+- also once a clip is watched, give user option to type a one liner summary for that clip. then only mark it as summarized else just watched.
+for watched keep the color yellow and for summarized keep the color as green. and then based on watch count change color to blue, purple etc..
+
+
+make sure to use duolingo's theme, as it has 3d buttons with shadows and all. the green theme etc.

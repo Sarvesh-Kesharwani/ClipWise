@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useApp } from '../store/useApp';
 import { storeVideoFile, extractVideoMetadata } from '../utils/videoDb';
 import { extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle, isPlaylistUrl, extractPlaylistId, fetchPlaylistVideoIds } from '../utils/youtube';
+import { fetchYouLearnVideos, isYouLearnSpaceUrl } from '../utils/youlearn';
 import { generateId } from '../utils/helpers';
 
 interface Props {
@@ -52,6 +53,11 @@ export default function AddVideoModal({ onClose }: Props) {
   async function handleYouTube() {
     if (!youtubeUrl.trim()) return;
 
+    if (isYouLearnSpaceUrl(youtubeUrl)) {
+      await handleYouLearn();
+      return;
+    }
+
     // Check if it's a playlist URL
     if (isPlaylistUrl(youtubeUrl)) {
       await handlePlaylist();
@@ -60,7 +66,7 @@ export default function AddVideoModal({ onClose }: Props) {
 
     const videoId = extractYouTubeId(youtubeUrl);
     if (!videoId) {
-      setError('Invalid YouTube URL. Please paste a valid YouTube video or playlist link.');
+      setError('Invalid URL. Paste a YouTube video/playlist or public YouLearn space/playlist link.');
       return;
     }
 
@@ -142,6 +148,49 @@ export default function AddVideoModal({ onClose }: Props) {
     }
   }
 
+  async function handleYouLearn() {
+    setLoading(true);
+    setError('');
+    setPlaylistProgress(null);
+
+    try {
+      const videos = await fetchYouLearnVideos(youtubeUrl);
+
+      if (videos.length === 0) {
+        setError('No public videos found in this YouLearn space or playlist.');
+        setLoading(false);
+        return;
+      }
+
+      setPlaylistProgress({ current: 0, total: videos.length });
+
+      for (let i = 0; i < videos.length; i++) {
+        const video = videos[i];
+        addVideo({
+          id: generateId(),
+          title: video.title,
+          source: 'youlearn',
+          externalUrl: video.externalUrl,
+          youlearnContentId: video.contentId,
+          youlearnSpaceUrl: youtubeUrl,
+          duration: video.duration,
+          thumbnail: video.thumbnail,
+          createdAt: Date.now(),
+          folderId: selectedFolderId || undefined,
+        });
+
+        setPlaylistProgress({ current: i + 1, total: videos.length });
+      }
+
+      onClose();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to process YouLearn link.');
+    } finally {
+      setLoading(false);
+      setPlaylistProgress(null);
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -161,7 +210,7 @@ export default function AddVideoModal({ onClose }: Props) {
             className={`tab ${tab === 'youtube' ? 'active' : ''}`}
             onClick={() => { setTab('youtube'); setError(''); }}
           >
-            YouTube
+            Link
           </button>
         </div>
 
@@ -205,7 +254,7 @@ export default function AddVideoModal({ onClose }: Props) {
               <input
                 type="url"
                 className="input"
-                placeholder="Video or playlist URL..."
+                placeholder="YouTube or public YouLearn URL..."
                 value={youtubeUrl}
                 onChange={e => setYoutubeUrl(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleYouTube()}

@@ -98,7 +98,7 @@ export default function PlayerPage() {
     setTimeout(() => { seekingRef.current = false; }, 500);
   }
 
-  // Load local video file from IndexedDB
+  // Load file-backed or external video source.
   useEffect(() => {
     if (!video) return;
 
@@ -112,6 +112,11 @@ export default function PlayerPage() {
         } else {
           setLoading(false);
         }
+      });
+    } else if (video.source === 'youlearn') {
+      queueMicrotask(() => {
+        setVideoSrc(video.externalUrl ?? '');
+        setLoading(false);
       });
     } else {
       queueMicrotask(() => setLoading(false));
@@ -319,7 +324,7 @@ export default function PlayerPage() {
 
       <div className="player-main">
         <div className="player-video-container">
-          {video.source === 'local' ? (
+          {video.source === 'local' || video.source === 'youlearn' ? (
             <LocalPlayer
               ref={playerRef}
               src={videoSrc}

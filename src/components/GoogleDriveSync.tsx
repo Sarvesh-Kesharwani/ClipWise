@@ -15,7 +15,9 @@ export default function GoogleDriveSync({ compact }: Props) {
   } = useApp();
   const isBusy = cloudSync.status === 'signing-in'
     || cloudSync.status === 'syncing'
-    || cloudSync.status === 'loading';
+    || cloudSync.status === 'loading'
+    || cloudSync.status === 'restoring'
+    || cloudSync.requiresDriveRestore;
   const statusClass = cloudSync.status === 'error' ? 'error' : 'ready';
   const lastSynced = cloudSync.lastSyncedAt
     ? `Last sync ${formatDateTime(cloudSync.lastSyncedAt)}`
@@ -44,7 +46,7 @@ export default function GoogleDriveSync({ compact }: Props) {
               <button
                 className="btn-primary"
                 onClick={() => void syncToGoogleDrive()}
-                disabled={isBusy}
+                disabled={isBusy || cloudSync.requiresDriveRestore}
               >
                 {cloudSync.status === 'syncing' ? 'Saving...' : 'Save now'}
               </button>
@@ -104,7 +106,7 @@ export default function GoogleDriveSync({ compact }: Props) {
             <button
               className="btn-primary"
               onClick={() => void syncToGoogleDrive()}
-              disabled={isBusy}
+              disabled={isBusy || cloudSync.requiresDriveRestore}
             >
               {cloudSync.status === 'syncing' ? 'Saving...' : 'Save now'}
             </button>

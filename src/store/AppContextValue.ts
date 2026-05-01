@@ -2,12 +2,13 @@ import { createContext } from 'react';
 import type { Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList, ProgressState } from '../types';
 import type { GoogleUserProfile } from '../utils/googleDriveSync';
 
-export type CloudSyncStatus = 'idle' | 'signing-in' | 'syncing' | 'loading' | 'error';
+export type CloudSyncStatus = 'idle' | 'signing-in' | 'syncing' | 'loading' | 'restoring' | 'error';
 
 export interface CloudSyncState {
   isConfigured: boolean;
   isSignedIn: boolean;
   hasPendingChanges: boolean;
+  requiresDriveRestore: boolean;
   status: CloudSyncStatus;
   message: string;
   lastSyncedAt: number | null;

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store/useApp';
-import type { Instance } from '../types';
+import type { Instance, Video } from '../types';
 import { currentTimestamp, generateId, formatDuration, generateClipsForDuration } from '../utils/helpers';
 
 interface Props {
@@ -67,8 +67,8 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
           <button className="close-btn" onClick={onClose}>&times;</button>
         </div>
         <p className="modal-subtitle">
-          {video.source === 'youtube' ? '▶ YouTube' : '🎬 Local'}
-          {' · '}
+          {getSourceLabel(video.source)}
+          {' - '}
           {video.duration > 0 ? formatDuration(video.duration) : 'Duration detected on play'}
         </p>
 
@@ -88,7 +88,7 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
                   <div className="instance-info">
                     <h3>{inst.name}</h3>
                     <span className="instance-meta">
-                      {inst.clipSizeMinutes}min clips · {p.total || '?'} clips
+                      {inst.clipSizeMinutes}min clips - {p.total || '?'} clips
                     </span>
                   </div>
                   {p.total > 0 && (
@@ -109,7 +109,7 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
                   onClick={(e) => { e.stopPropagation(); deleteInstance(inst.id); }}
                   title="Delete instance"
                 >
-                  🗑
+                  Delete
                 </button>
               </div>
             );
@@ -166,4 +166,10 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
       </div>
     </div>
   );
+}
+
+function getSourceLabel(source: Video['source']): string {
+  if (source === 'youtube') return 'YouTube';
+  if (source === 'youlearn') return 'YouLearn';
+  return 'Local';
 }

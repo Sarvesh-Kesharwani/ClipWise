@@ -158,6 +158,13 @@ export default function RemixPlayerPage() {
         }
         setLoading(false);
       });
+    } else if (currentItem.video.source === 'youlearn') {
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setVideoSrc(currentItem.video.externalUrl ?? '');
+          setLoading(false);
+        }
+      });
     } else {
       queueMicrotask(() => {
         if (!cancelled) {
@@ -300,7 +307,7 @@ export default function RemixPlayerPage() {
         </div>
 
         <div className="player-video-container">
-          {currentItem.video.source === 'local' ? (
+          {currentItem.video.source === 'local' || currentItem.video.source === 'youlearn' ? (
             <LocalPlayer
               key={currentItem.ref.id}
               ref={playerRef}

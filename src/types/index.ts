@@ -1,9 +1,12 @@
 export interface Video {
   id: string;
   title: string;
-  source: 'local' | 'youtube';
+  source: 'local' | 'youtube' | 'youlearn';
   youtubeId?: string;
   youtubeUrl?: string;
+  externalUrl?: string;
+  youlearnContentId?: string;
+  youlearnSpaceUrl?: string;
   duration: number;
   thumbnail?: string;
   createdAt: number;
