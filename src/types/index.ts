@@ -8,6 +8,8 @@ export interface Video {
   thumbnail?: string;
   createdAt: number;
   folderId?: string;
+  /** Timestamp (ms) of the most recent clip completion belonging to this video. */
+  lastWatchedAt?: number;
 }
 
 export interface Folder {
@@ -22,6 +24,14 @@ export interface FeatureRequest {
   completed: boolean;
   createdAt: number;
   completedAt?: number;
+}
+
+export interface FeedList {
+  id: string;
+  name: string;
+  videoIds: string[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface Instance {
@@ -58,12 +68,41 @@ export interface Remix {
 
 export type ClipStatus = 'unwatched' | 'watched' | 'summarized' | 'rewatched-2' | 'rewatched-3plus';
 
+/** Per-day clip completion counter, persisted forever. */
+export interface DailyProgress {
+  /** Local date string in YYYY-MM-DD form. */
+  date: string;
+  clipsCompleted: number;
+  target: number;
+  /** True if a streak freeze was consumed to keep the streak alive on this day. */
+  freezeUsed?: boolean;
+}
+
+export interface ProgressState {
+  /** Daily completion log, oldest -> newest. */
+  daily: DailyProgress[];
+  /** Daily target for *today*. Adapts based on history. */
+  currentTarget: number;
+  /** Consecutive days where the target was met (or freeze used). */
+  currentStreak: number;
+  /** All-time longest streak reached. */
+  bestStreak: number;
+  /** Streak freezes the user owns (Duolingo-style). */
+  freezes: number;
+  /** Cumulative clips completed *beyond* daily targets (drives freeze rewards). */
+  extraClipsBank: number;
+  /** Most recent date a clip was completed (YYYY-MM-DD), used for streak rollover. */
+  lastActiveDate?: string;
+}
+
 export interface AppData {
   videos: Video[];
   instances: Instance[];
   folders: Folder[];
   remixes: Remix[];
   featureRequests: FeatureRequest[];
+  feedLists: FeedList[];
+  progress: ProgressState;
 }
 
 export interface PlayerRef {

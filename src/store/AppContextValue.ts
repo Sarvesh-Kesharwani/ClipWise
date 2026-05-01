@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { Video, Instance, Clip, Folder, Remix, FeatureRequest } from '../types';
+import type { Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList, ProgressState } from '../types';
 import type { GoogleUserProfile } from '../utils/googleDriveSync';
 
 export type CloudSyncStatus = 'idle' | 'signing-in' | 'syncing' | 'loading' | 'error';
@@ -21,6 +21,8 @@ export interface AppContextType {
   folders: Folder[];
   remixes: Remix[];
   featureRequests: FeatureRequest[];
+  feedLists: FeedList[];
+  progress: ProgressState;
   cloudSync: CloudSyncState;
   addVideo: (video: Video) => void;
   deleteVideo: (videoId: string) => void;
@@ -43,6 +45,12 @@ export interface AppContextType {
   addFeatureRequest: (request: FeatureRequest) => void;
   toggleFeatureRequestComplete: (requestId: string) => void;
   deleteFeatureRequest: (requestId: string) => void;
+  addFeedList: (list: FeedList) => void;
+  renameFeedList: (listId: string, name: string) => void;
+  deleteFeedList: (listId: string) => void;
+  setFeedListVideos: (listId: string, videoIds: string[]) => void;
+  recordClipWatched: (videoId: string) => void;
+  useStreakFreeze: () => void;
   resetProgress: () => void;
   signInWithGoogle: () => Promise<void>;
   signOutGoogle: () => Promise<void>;

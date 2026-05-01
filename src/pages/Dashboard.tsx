@@ -10,7 +10,11 @@ import RemixCard from '../components/RemixCard';
 import ResetProgressModal from '../components/ResetProgressModal';
 import VideoCard from '../components/VideoCard';
 import FeatureRequestMenu from '../components/FeatureRequestMenu';
+import MobileNav from '../components/MobileNav';
 import { generateId } from '../utils/helpers';
+import { getTodaySnapshot } from '../utils/progress';
+
+type VideoFilter = 'all' | 'watched-today' | 'watched-week' | 'unwatched';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -18,6 +22,7 @@ export default function Dashboard() {
     videos,
     folders,
     remixes,
+    progress,
     cloudSync,
     signInWithGoogle,
     signOutGoogle,
@@ -38,6 +43,7 @@ export default function Dashboard() {
   const [showResetModal, setShowResetModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showRequests, setShowRequests] = useState(false);
+  const [videoFilter, setVideoFilter] = useState<VideoFilter>('all');
   const settingsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const requestsRef = useRef<HTMLDivElement>(null);
@@ -69,9 +75,10 @@ export default function Dashboard() {
 
   const profile = cloudSync.userProfile;
   const isSignedIn = cloudSync.isSignedIn;
-  const uncategorizedVideos = videos.filter(
+  const progressToday = getTodaySnapshot(progress);
+  const uncategorizedVideos = applyVideoFilter(videos.filter(
     video => !video.folderId || !folders.some(folder => folder.id === video.folderId)
-  );
+  ), videoFilter);
   const syncIndicator = getSyncIndicator(cloudSync);
 
   return (
@@ -133,6 +140,17 @@ export default function Dashboard() {
         </div>
 
         {/* Right: Profile avatar or sign-in */}
+        <div className="dashboard-top-right">
+          <button
+            className="streak-pill"
+            onClick={() => navigate('/reports')}
+            title={`${progressToday.currentStreak} day streak`}
+            aria-label={`${progressToday.currentStreak} day streak`}
+          >
+            <span className="streak-fire">Fire</span>
+            <strong>{progressToday.currentStreak}</strong>
+          </button>
+
         <div className="profile-wrap" ref={profileRef}>
           {isSignedIn && profile ? (
             <>
@@ -195,6 +213,7 @@ export default function Dashboard() {
             </button>
           )}
         </div>
+        </div>
       </div>
 
       <header className="dashboard-header">
@@ -203,6 +222,24 @@ export default function Dashboard() {
           <h1>ClipWise</h1>
         </div>
         <p className="tagline">Watch smarter. Learn clip by clip.</p>
+        <div className="dashboard-progress-card">
+          <div className="dashboard-progress-copy">
+            <span>Daily target</span>
+            <strong>{progressToday.clipsCompleted}/{progressToday.target} clips</strong>
+            <small>
+              {progressToday.metToday
+                ? 'Target met. Tomorrow gets harder.'
+                : `${Math.max(0, progressToday.target - progressToday.clipsCompleted)} left today`}
+            </small>
+          </div>
+          <div className="dashboard-progress-track" aria-label={`Daily progress ${progressToday.clipsCompleted} of ${progressToday.target}`}>
+            <div className="dashboard-progress-fill" style={{ width: `${progressToday.progress * 100}%` }} />
+          </div>
+          <div className="dashboard-reward-copy">
+            <span>{progressToday.freezes} freezes</span>
+            <span>{progressToday.extraClipsBank}/50 extra</span>
+          </div>
+        </div>
       </header>
 
       <div className="dashboard-actions">
@@ -212,9 +249,32 @@ export default function Dashboard() {
         <button className="btn-primary btn-add watch-mix-btn" onClick={() => setShowWatchMixModal(true)}>
           Watch Mix
         </button>
+        <button className="btn-primary btn-add feed-btn" onClick={() => navigate('/feed')}>
+          Feed
+        </button>
+        <button className="btn-secondary btn-add reports-btn" onClick={() => navigate('/reports')}>
+          Reports
+        </button>
         <button className="btn-secondary btn-add-folder" onClick={handleCreateFolder}>
           + New Folder
         </button>
+      </div>
+
+      <div className="dashboard-filter-row" aria-label="Video watch filter">
+        {[
+          ['all', 'All'],
+          ['watched-today', 'Today'],
+          ['watched-week', 'This week'],
+          ['unwatched', 'Unwatched'],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            className={`filter-chip ${videoFilter === value ? 'active' : ''}`}
+            onClick={() => setVideoFilter(value as VideoFilter)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {folders.length === 0 && videos.length === 0 && remixes.length === 0 ? (
@@ -294,7 +354,7 @@ export default function Dashboard() {
             <FolderCard
               key={folder.id}
               folder={folder}
-              videos={videos.filter(v => v.folderId === folder.id)}
+              videos={applyVideoFilter(videos.filter(v => v.folderId === folder.id), videoFilter)}
               getInstances={getInstancesForVideo}
               onVideoClick={setSelectedVideoId}
               onRename={renameFolder}
@@ -319,8 +379,27 @@ export default function Dashboard() {
           onClose={() => setShowResetModal(false)}
         />
       )}
+      <MobileNav />
     </div>
   );
+}
+
+function applyVideoFilter(videos: ReturnType<typeof useApp>['videos'], filter: VideoFilter) {
+  const now = Date.now();
+  const today = new Date().toDateString();
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+
+  switch (filter) {
+    case 'watched-today':
+      return videos.filter(video => video.lastWatchedAt && new Date(video.lastWatchedAt).toDateString() === today);
+    case 'watched-week':
+      return videos.filter(video => video.lastWatchedAt && video.lastWatchedAt >= weekAgo);
+    case 'unwatched':
+      return videos.filter(video => !video.lastWatchedAt);
+    case 'all':
+    default:
+      return videos;
+  }
 }
 
 function getSyncIndicator(cloudSync: ReturnType<typeof useApp>['cloudSync']) {

@@ -5,6 +5,7 @@ import LocalPlayer from '../components/LocalPlayer';
 import YouTubePlayer from '../components/YouTubePlayer';
 import ClipPanel from '../components/ClipPanel';
 import SummaryModal from '../components/SummaryModal';
+import MobileNav from '../components/MobileNav';
 import type { Clip, Instance, PlayerRef, RemixClipRef, Video } from '../types';
 import { formatTime } from '../utils/helpers';
 import { getVideoFile } from '../utils/videoDb';
@@ -23,7 +24,7 @@ interface RemixItem {
 export default function RemixPlayerPage() {
   const { remixId } = useParams<{ remixId: string }>();
   const navigate = useNavigate();
-  const { getRemix, getVideo, getInstance, updateClip } = useApp();
+  const { getRemix, getVideo, getInstance, updateClip, recordClipWatched } = useApp();
   const remix = remixId ? getRemix(remixId) : undefined;
 
   const playerRef = useRef<PlayerRef>(null);
@@ -177,6 +178,7 @@ export default function RemixPlayerPage() {
 
     countedRef.current.add(item.ref.id);
     updateClip(item.instance.id, item.clip.index, { watchCount: item.clip.watchCount + 1 });
+    recordClipWatched(item.video.id);
     setClipProgress(1);
     triggerCelebration(index);
 
@@ -380,6 +382,7 @@ export default function RemixPlayerPage() {
           </div>
         </div>
       )}
+      <MobileNav />
     </div>
   );
 }
