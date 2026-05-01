@@ -6,6 +6,7 @@ import YouTubePlayer from '../components/YouTubePlayer';
 import ClipPanel from '../components/ClipPanel';
 import SegmentedProgressBar from '../components/SegmentedProgressBar';
 import SummaryModal from '../components/SummaryModal';
+import MobileNav from '../components/MobileNav';
 import type { Clip, PlayerRef } from '../types';
 import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
@@ -17,7 +18,7 @@ const SUMMARY_PROMPT_DELAY_MS = 900;
 export default function PlayerPage() {
   const { instanceId } = useParams<{ instanceId: string }>();
   const navigate = useNavigate();
-  const { getInstance, getVideo, updateClip, generateClips, updateVideo } = useApp();
+  const { getInstance, getVideo, updateClip, generateClips, updateVideo, recordClipWatched } = useApp();
 
   const instance = getInstance(instanceId!);
   const video = instance ? getVideo(instance.videoId) : null;
@@ -200,6 +201,7 @@ export default function PlayerPage() {
     if (tracker.isComplete() && !countedRef.current.has(clipIdx)) {
       countedRef.current.add(clipIdx);
       updateClip(instance.id, clipIdx, { watchCount: clip.watchCount + 1 });
+      recordClipWatched(instance.videoId);
       triggerCelebration(clipIdx);
       if (!clip.summary.trim()) {
         playerRef.current?.pause();
@@ -407,6 +409,7 @@ export default function PlayerPage() {
           </div>
         </div>
       )}
+      <MobileNav />
     </div>
   );
 }

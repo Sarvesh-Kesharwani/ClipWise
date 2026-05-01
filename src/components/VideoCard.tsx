@@ -37,6 +37,9 @@ export default function VideoCard({ video, instances, onClick }: Props) {
           <span>{video.duration > 0 ? formatDuration(video.duration) : 'Duration TBD'}</span>
           <span>{instances.length} instance{instances.length !== 1 ? 's' : ''}</span>
         </div>
+        <div className="card-watch-meta">
+          {video.lastWatchedAt ? `Watched ${formatWatchDate(video.lastWatchedAt)}` : 'Not watched yet'}
+        </div>
         {totalClips > 0 && (
           <>
             <div className="card-progress-bar">
@@ -51,4 +54,15 @@ export default function VideoCard({ video, instances, onClick }: Props) {
       </div>
     </div>
   );
+}
+
+function formatWatchDate(ms: number): string {
+  const date = new Date(ms);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return 'today';
+  if (date.toDateString() === yesterday.toDateString()) return 'yesterday';
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }

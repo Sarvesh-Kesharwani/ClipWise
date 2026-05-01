@@ -1,5 +1,6 @@
 import type { AppData } from '../types';
 import type { GoogleUserProfile } from './googleDriveSync';
+import { emptyProgress } from './progress';
 
 const STORAGE_KEY = 'clipwise-data';
 const STORAGE_UPDATED_AT_KEY = 'clipwise-data-updated-at';
@@ -19,7 +20,15 @@ export interface StoredCloudSession {
 }
 
 function emptyAppData(): AppData {
-  return { videos: [], instances: [], folders: [], remixes: [], featureRequests: [] };
+  return {
+    videos: [],
+    instances: [],
+    folders: [],
+    remixes: [],
+    featureRequests: [],
+    feedLists: [],
+    progress: emptyProgress(),
+  };
 }
 
 function now(): number {

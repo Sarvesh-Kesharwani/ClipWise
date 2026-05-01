@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { AppData, Video, Instance, Clip, Folder, Remix, FeatureRequest } from '../types';
+import type { AppData, Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList } from '../types';
 import { AppContext } from './AppContextValue';
 import type { CloudSyncState } from './AppContextValue';
 import {
@@ -11,6 +11,7 @@ import {
   saveCloudSession,
 } from '../utils/storage';
 import { generateClipsForDuration, generateId } from '../utils/helpers';
+import { emptyProgress, ensureProgress, recordClipCompletion } from '../utils/progress';
 import { clearAllVideoFiles } from '../utils/videoDb';
 import {
   createDrivePayload,
@@ -38,6 +39,8 @@ function migrateAppData(data: AppData): AppData {
     folders: Array.isArray(data.folders) ? data.folders : [],
     remixes: Array.isArray(data.remixes) ? data.remixes : [],
     featureRequests: Array.isArray(data.featureRequests) ? data.featureRequests : [],
+    feedLists: Array.isArray(data.feedLists) ? data.feedLists : [],
+    progress: ensureProgress(data.progress),
   };
 
   // Ensure the app always has at least one folder to render into.
@@ -154,6 +157,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       videos: prev.videos.filter(v => v.id !== videoId),
       instances: prev.instances.filter(i => i.videoId !== videoId),
+      feedLists: prev.feedLists.map(list => ({
+        ...list,
+        videoIds: list.videoIds.filter(id => id !== videoId),
+        updatedAt: Date.now(),
+      })),
       remixes: prev.remixes
         .map(remix => ({
           ...remix,
@@ -200,6 +208,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         };
       }),
     }));
+  }, [setDataWithLocalChange]);
+
+  /**
+   * Mark a clip-watch as a completion event: bumps daily progress, the video's
+   * lastWatchedAt, and (if applicable) the streak. Idempotent at the call site
+   * — the player decides when to call this exactly once per clip per session.
+   */
+  const recordClipWatched = useCallback((videoId: string) => {
+    const now = Date.now();
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      progress: recordClipCompletion(prev.progress ?? emptyProgress(), new Date(now)),
+      videos: prev.videos.map(v => v.id === videoId ? { ...v, lastWatchedAt: now } : v),
+    }));
+  }, [setDataWithLocalChange]);
+
+  const useStreakFreeze = useCallback(() => {
+    setDataWithLocalChange(prev => {
+      const progress = ensureProgress(prev.progress);
+      if (progress.freezes <= 0) return prev;
+      return {
+        ...prev,
+        progress: { ...progress, freezes: progress.freezes - 1 },
+      };
+    });
   }, [setDataWithLocalChange]);
 
   const getInstancesForVideo = useCallback((videoId: string) => {
@@ -309,6 +342,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [setDataWithLocalChange]);
 
+  const addFeedList = useCallback((list: FeedList) => {
+    setDataWithLocalChange(prev => ({ ...prev, feedLists: [...prev.feedLists, list] }));
+  }, [setDataWithLocalChange]);
+
+  const renameFeedList = useCallback((listId: string, name: string) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      feedLists: prev.feedLists.map(list =>
+        list.id === listId ? { ...list, name, updatedAt: Date.now() } : list
+      ),
+    }));
+  }, [setDataWithLocalChange]);
+
+  const deleteFeedList = useCallback((listId: string) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      feedLists: prev.feedLists.filter(list => list.id !== listId),
+    }));
+  }, [setDataWithLocalChange]);
+
+  const setFeedListVideos = useCallback((listId: string, videoIds: string[]) => {
+    const uniqueVideoIds = Array.from(new Set(videoIds));
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      feedLists: prev.feedLists.map(list =>
+        list.id === listId ? { ...list, videoIds: uniqueVideoIds, updatedAt: Date.now() } : list
+      ),
+    }));
+  }, [setDataWithLocalChange]);
+
   const resetProgress = useCallback(() => {
     const emptyData: AppData = {
       videos: [],
@@ -316,6 +379,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       folders: [createDefaultFolder()],
       remixes: [],
       featureRequests: [],
+      feedLists: [],
+      progress: emptyProgress(),
     };
     clearAppData();
     void clearAllVideoFiles();
@@ -334,6 +399,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       folders: [createDefaultFolder()],
       remixes: [],
       featureRequests: [],
+      feedLists: [],
+      progress: emptyProgress(),
     };
     setData(emptyData);
     setDataUpdatedAt(Date.now());
@@ -638,6 +705,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       folders: data.folders,
       remixes: data.remixes,
       featureRequests: data.featureRequests,
+      feedLists: data.feedLists,
+      progress: data.progress,
       cloudSync,
       addVideo, deleteVideo, updateVideo,
       addInstance, deleteInstance, updateClip,
@@ -646,6 +715,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addFolder, renameFolder, deleteFolder, moveVideoToFolder,
       addRemix, updateRemix, deleteRemix, getRemix,
       addFeatureRequest, toggleFeatureRequestComplete, deleteFeatureRequest,
+      addFeedList, renameFeedList, deleteFeedList, setFeedListVideos,
+      recordClipWatched, useStreakFreeze,
       resetProgress,
       signInWithGoogle,
       signOutGoogle,
