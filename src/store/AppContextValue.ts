@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { Video, Instance, Clip, Folder, Remix } from '../types';
+import type { Video, Instance, Clip, Folder, Remix, FeatureRequest } from '../types';
 import type { GoogleUserProfile } from '../utils/googleDriveSync';
 
 export type CloudSyncStatus = 'idle' | 'signing-in' | 'syncing' | 'loading' | 'error';
@@ -20,6 +20,7 @@ export interface AppContextType {
   instances: Instance[];
   folders: Folder[];
   remixes: Remix[];
+  featureRequests: FeatureRequest[];
   cloudSync: CloudSyncState;
   addVideo: (video: Video) => void;
   deleteVideo: (videoId: string) => void;
@@ -39,6 +40,9 @@ export interface AppContextType {
   updateRemix: (remix: Remix) => void;
   deleteRemix: (remixId: string) => void;
   getRemix: (remixId: string) => Remix | undefined;
+  addFeatureRequest: (request: FeatureRequest) => void;
+  toggleFeatureRequestComplete: (requestId: string) => void;
+  deleteFeatureRequest: (requestId: string) => void;
   resetProgress: () => void;
   signInWithGoogle: () => Promise<void>;
   signOutGoogle: () => Promise<void>;

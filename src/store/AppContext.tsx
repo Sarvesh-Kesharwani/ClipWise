@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { AppData, Video, Instance, Clip, Folder, Remix } from '../types';
+import type { AppData, Video, Instance, Clip, Folder, Remix, FeatureRequest } from '../types';
 import { AppContext } from './AppContextValue';
 import type { CloudSyncState } from './AppContextValue';
 import {
@@ -37,6 +37,7 @@ function migrateAppData(data: AppData): AppData {
     ...data,
     folders: Array.isArray(data.folders) ? data.folders : [],
     remixes: Array.isArray(data.remixes) ? data.remixes : [],
+    featureRequests: Array.isArray(data.featureRequests) ? data.featureRequests : [],
   };
 
   // Ensure the app always has at least one folder to render into.
@@ -279,8 +280,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return data.remixes.find(remix => remix.id === remixId);
   }, [data.remixes]);
 
+  const addFeatureRequest = useCallback((request: FeatureRequest) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      featureRequests: [request, ...prev.featureRequests],
+    }));
+  }, [setDataWithLocalChange]);
+
+  const toggleFeatureRequestComplete = useCallback((requestId: string) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      featureRequests: prev.featureRequests.map(request => (
+        request.id === requestId
+          ? {
+              ...request,
+              completed: !request.completed,
+              completedAt: request.completed ? undefined : Date.now(),
+            }
+          : request
+      )),
+    }));
+  }, [setDataWithLocalChange]);
+
+  const deleteFeatureRequest = useCallback((requestId: string) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      featureRequests: prev.featureRequests.filter(request => request.id !== requestId),
+    }));
+  }, [setDataWithLocalChange]);
+
   const resetProgress = useCallback(() => {
-    const emptyData: AppData = { videos: [], instances: [], folders: [createDefaultFolder()], remixes: [] };
+    const emptyData: AppData = {
+      videos: [],
+      instances: [],
+      folders: [createDefaultFolder()],
+      remixes: [],
+      featureRequests: [],
+    };
     clearAppData();
     void clearAllVideoFiles();
     setData(emptyData);
@@ -292,7 +328,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const clearLocalData = useCallback(() => {
     clearAppData();
     void clearAllVideoFiles();
-    const emptyData: AppData = { videos: [], instances: [], folders: [createDefaultFolder()], remixes: [] };
+    const emptyData: AppData = {
+      videos: [],
+      instances: [],
+      folders: [createDefaultFolder()],
+      remixes: [],
+      featureRequests: [],
+    };
     setData(emptyData);
     setDataUpdatedAt(Date.now());
   }, []);
@@ -595,6 +637,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       instances: data.instances,
       folders: data.folders,
       remixes: data.remixes,
+      featureRequests: data.featureRequests,
       cloudSync,
       addVideo, deleteVideo, updateVideo,
       addInstance, deleteInstance, updateClip,
@@ -602,6 +645,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       generateClips,
       addFolder, renameFolder, deleteFolder, moveVideoToFolder,
       addRemix, updateRemix, deleteRemix, getRemix,
+      addFeatureRequest, toggleFeatureRequestComplete, deleteFeatureRequest,
       resetProgress,
       signInWithGoogle,
       signOutGoogle,

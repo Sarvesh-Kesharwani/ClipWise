@@ -9,6 +9,7 @@ import WatchMixModal from '../components/WatchMixModal';
 import RemixCard from '../components/RemixCard';
 import ResetProgressModal from '../components/ResetProgressModal';
 import VideoCard from '../components/VideoCard';
+import FeatureRequestMenu from '../components/FeatureRequestMenu';
 import { generateId } from '../utils/helpers';
 
 export default function Dashboard() {
@@ -36,14 +37,19 @@ export default function Dashboard() {
   const [showSettings, setShowSettings] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showRequests, setShowRequests] = useState(false);
   const settingsRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const requestsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!showSettings && !showProfileMenu) return;
+    if (!showSettings && !showProfileMenu && !showRequests) return;
     function handleClickOutside(e: MouseEvent) {
       if (showSettings && settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
         setShowSettings(false);
+      }
+      if (showRequests && requestsRef.current && !requestsRef.current.contains(e.target as Node)) {
+        setShowRequests(false);
       }
       if (showProfileMenu && profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setShowProfileMenu(false);
@@ -51,7 +57,7 @@ export default function Dashboard() {
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showSettings, showProfileMenu]);
+  }, [showRequests, showSettings, showProfileMenu]);
 
   function handleCreateFolder() {
     addFolder({
@@ -95,6 +101,22 @@ export default function Dashboard() {
                 >
                   Reset All Progress
                 </button>
+              </div>
+            )}
+          </div>
+
+          <div className="feature-request-wrap" ref={requestsRef}>
+            <button
+              className="feature-request-btn"
+              onClick={() => setShowRequests(prev => !prev)}
+              title="Feature and bug requests"
+              aria-label="Feature and bug requests"
+            >
+              Requests
+            </button>
+            {showRequests && (
+              <div className="feature-request-dropdown">
+                <FeatureRequestMenu />
               </div>
             )}
           </div>
