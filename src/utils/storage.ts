@@ -19,7 +19,7 @@ export interface StoredCloudSession {
 }
 
 function emptyAppData(): AppData {
-  return { videos: [], instances: [], folders: [], remixes: [] };
+  return { videos: [], instances: [], folders: [], remixes: [], featureRequests: [] };
 }
 
 function now(): number {

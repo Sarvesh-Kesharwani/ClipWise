@@ -16,6 +16,14 @@ export interface Folder {
   createdAt: number;
 }
 
+export interface FeatureRequest {
+  id: string;
+  description: string;
+  completed: boolean;
+  createdAt: number;
+  completedAt?: number;
+}
+
 export interface Instance {
   id: string;
   videoId: string;
@@ -55,6 +63,7 @@ export interface AppData {
   instances: Instance[];
   folders: Folder[];
   remixes: Remix[];
+  featureRequests: FeatureRequest[];
 }
 
 export interface PlayerRef {
