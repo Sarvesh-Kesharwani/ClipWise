@@ -1,161 +1,212 @@
-import type { FeedList, Video } from '../../types';
-import { formatTime, generateId } from '../../utils/helpers';
+import { useState } from 'react';
+import type { CSSProperties } from 'react';
+import type { Folder, Video } from '../../types';
+import { formatTime } from '../../utils/helpers';
+import { getFolderDepth } from '../../utils/folders';
+
+export interface FeedFolderGroup {
+  key: string;
+  name: string;
+  depth: number;
+  videos: Video[];
+}
 
 interface Props {
-  videos: Video[];
-  feedLists: FeedList[];
-  selectedList: FeedList | null;
+  groups: FeedFolderGroup[];
+  folders: Folder[];
+  selectedFolderId: string;
+  sourceFolderIds: string[];
   selectedVideosCount: number;
   clipSize: number;
-  newListName: string;
   clipSizes: number[];
-  onNewListNameChange: (name: string) => void;
-  onCreateList: (list: FeedList) => void;
-  onSelectList: (listId: string) => void;
-  onRenameList: (listId: string, name: string) => void;
-  onDeleteList: (listId: string) => void;
-  onToggleVideo: (videoId: string) => void;
+  autoStart: boolean;
+  preferSound: boolean;
+  includeSubfolders: boolean;
+  settingsOpen: boolean;
+  onSettingsOpenChange: (open: boolean) => void;
+  onSelectFolder: (folderId: string) => void;
+  onSourceFolderToggle: (folderId: string) => void;
   onClipSizeChange: (size: number) => void;
-  onStartFeed: () => void;
-  canStartFeed: boolean;
+  onAutoStartChange: (value: boolean) => void;
+  onPreferSoundChange: (value: boolean) => void;
+  onIncludeSubfoldersChange: (value: boolean) => void;
 }
 
 export default function ListManager({
-  videos,
-  feedLists,
-  selectedList,
+  groups,
+  folders,
+  selectedFolderId,
+  sourceFolderIds,
   selectedVideosCount,
   clipSize,
-  newListName,
   clipSizes,
-  onNewListNameChange,
-  onCreateList,
-  onSelectList,
-  onRenameList,
-  onDeleteList,
-  onToggleVideo,
+  autoStart,
+  preferSound,
+  includeSubfolders,
+  settingsOpen,
+  onSettingsOpenChange,
+  onSelectFolder,
+  onSourceFolderToggle,
   onClipSizeChange,
-  onStartFeed,
-  canStartFeed,
+  onAutoStartChange,
+  onPreferSoundChange,
+  onIncludeSubfoldersChange,
 }: Props) {
-  function createList() {
-    const now = Date.now();
-    onCreateList({
-      id: generateId(),
-      name: newListName.trim() || `Feed List ${feedLists.length + 1}`,
-      videoIds: [],
-      createdAt: now,
-      updatedAt: now,
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const sourceSet = new Set(sourceFolderIds);
+  const allSourcesEnabled = sourceFolderIds.length === 0;
+
+  function toggleCollapse(key: string) {
+    setCollapsedFolders(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
     });
   }
 
-  function renameSelectedList() {
-    if (!selectedList) return;
-    const name = window.prompt('Rename list', selectedList.name)?.trim();
-    if (name) onRenameList(selectedList.id, name);
-  }
-
-  function deleteSelectedList() {
-    if (!selectedList) return;
-    if (window.confirm(`Delete "${selectedList.name}"?`)) onDeleteList(selectedList.id);
-  }
-
   return (
-    <section className="feed-builder">
-      <div className="feed-panel feed-list-panel">
-        <div className="feed-panel-header">
-          <div>
-            <h2>Lists</h2>
-            <span>{feedLists.length} saved</span>
-          </div>
-        </div>
-
-        <div className="feed-create-row">
-          <input
-            className="input"
-            value={newListName}
-            onChange={event => onNewListNameChange(event.target.value)}
-            onKeyDown={event => event.key === 'Enter' && createList()}
-            placeholder="New list name"
-          />
-          <button className="btn-primary" onClick={createList}>Create</button>
-        </div>
-
-        <div className="feed-list-stack">
-          {feedLists.length === 0 ? (
-            <p className="feed-empty-copy">Create a list to start building your feed.</p>
-          ) : feedLists.map(list => (
-            <button
-              key={list.id}
-              className={`feed-list-row ${selectedList?.id === list.id ? 'active' : ''}`}
-              onClick={() => onSelectList(list.id)}
-            >
-              <strong>{list.name}</strong>
-              <span>{list.videoIds.length} video{list.videoIds.length !== 1 ? 's' : ''}</span>
+    <section className="feed-builder feed-builder-folder-first">
+      {settingsOpen && (
+        <div className="feed-panel feed-settings-panel">
+          <div className="feed-panel-header">
+            <div>
+              <h2>Feed settings</h2>
+              <span>Folders, clips, playback</span>
+            </div>
+            <button className="feed-panel-close" onClick={() => onSettingsOpenChange(false)}>
+              Close
             </button>
-          ))}
-        </div>
-
-        {selectedList && (
-          <div className="feed-list-actions">
-            <button className="btn-secondary" onClick={renameSelectedList}>Rename</button>
-            <button className="btn-danger" onClick={deleteSelectedList}>Delete</button>
           </div>
-        )}
-      </div>
 
-      <div className="feed-panel feed-videos-panel">
+          <div className="feed-settings-grid">
+            <div className="feed-setting-block">
+              <strong>Source folders</strong>
+              <p>Leave all unchecked to use every folder.</p>
+              <label className="feed-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={includeSubfolders}
+                  onChange={event => onIncludeSubfoldersChange(event.target.checked)}
+                />
+                <span>Include nested subfolders in playback</span>
+              </label>
+              <div className="feed-source-list">
+                {folders.map(folder => (
+                  <label
+                    key={folder.id}
+                    className="feed-source-row"
+                    style={{ '--folder-depth': getFolderDepth(folder, folders) } as CSSProperties}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!allSourcesEnabled && sourceSet.has(folder.id)}
+                      onChange={() => onSourceFolderToggle(folder.id)}
+                    />
+                    <span>{folder.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="feed-setting-block">
+              <strong>Clip size</strong>
+              <div className="feed-size-buttons" role="group" aria-label="Clip size">
+                {clipSizes.map(size => (
+                  <button
+                    key={size}
+                    className={`size-btn ${clipSize === size ? 'active' : ''}`}
+                    onClick={() => onClipSizeChange(size)}
+                  >
+                    {size}s
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="feed-setting-block">
+              <strong>Playback</strong>
+              <label className="feed-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={autoStart}
+                  onChange={event => onAutoStartChange(event.target.checked)}
+                />
+                <span>Auto-start last selected folder</span>
+              </label>
+              <label className="feed-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={preferSound}
+                  onChange={event => onPreferSoundChange(event.target.checked)}
+                />
+                <span>Start with sound when browser allows it</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="feed-panel feed-folders-panel">
         <div className="feed-panel-header">
           <div>
-            <h2>{selectedList?.name ?? 'Select a list'}</h2>
-            <span>{selectedVideosCount} selected videos</span>
-          </div>
-        </div>
-
-        <div className="feed-clip-size-row">
-          <span>Clip size</span>
-          <div className="feed-size-buttons" role="group" aria-label="Clip size">
-            {clipSizes.map(size => (
-              <button
-                key={size}
-                className={`size-btn ${clipSize === size ? 'active' : ''}`}
-                onClick={() => onClipSizeChange(size)}
-              >
-                {size}s
-              </button>
-            ))}
+            <h2>Folders</h2>
+            <span>{selectedVideosCount} clips source videos selected</span>
           </div>
         </div>
 
         <div className="feed-video-picker">
-          {videos.length === 0 ? (
-            <p className="feed-empty-copy">Add videos on the dashboard first.</p>
-          ) : videos.map(video => {
-            const selected = Boolean(selectedList?.videoIds.includes(video.id));
+          {groups.length === 0 ? (
+            <p className="feed-empty-copy">Add videos to folders on dashboard first.</p>
+          ) : groups.map(group => {
+            const isCollapsed = collapsedFolders.has(group.key);
+            const isSelected = selectedFolderId === group.key;
             return (
-              <button
-                type="button"
-                key={video.id}
-                className={`feed-video-option ${selected ? 'selected' : ''}`}
-                onClick={() => onToggleVideo(video.id)}
-                disabled={!selectedList}
+              <div
+                key={group.key}
+                className={`feed-folder-group ${isSelected ? 'selected' : ''}`}
+                style={{ '--folder-depth': group.depth } as CSSProperties}
               >
-                <span className="feed-video-thumb">
-                  {video.thumbnail ? <img src={video.thumbnail} alt="" /> : <span>{video.source === 'youtube' ? 'Play' : 'Local'}</span>}
-                </span>
-                <span className="feed-video-copy">
-                  <strong>{video.title}</strong>
-                  <span>{video.duration > 0 ? formatTime(video.duration) : 'Duration loads during playback'}</span>
-                </span>
-                <span className="feed-check">{selected ? 'Added' : 'Add'}</span>
-              </button>
+                <div className="feed-folder-group-header">
+                  <button
+                    type="button"
+                    className="feed-folder-toggle"
+                    onClick={() => toggleCollapse(group.key)}
+                    aria-expanded={!isCollapsed}
+                  >
+                    <span className={`folder-chevron ${isCollapsed ? '' : 'open'}`}>⌃</span>
+                    <strong>{group.name}</strong>
+                    <span className="feed-folder-count">
+                      {group.videos.length} video{group.videos.length !== 1 ? 's' : ''}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="feed-folder-play"
+                    onClick={() => onSelectFolder(group.key)}
+                  >
+                    {isSelected ? 'Selected' : 'Use'}
+                  </button>
+                </div>
+                {!isCollapsed && (
+                  <div className="feed-folder-group-body">
+                    {group.videos.map(video => (
+                      <div key={video.id} className="feed-video-option feed-video-option-readonly">
+                        <span className="feed-video-thumb">
+                          {video.thumbnail ? <img src={video.thumbnail} alt="" /> : <span>{video.source === 'youtube' ? 'Play' : 'Local'}</span>}
+                        </span>
+                        <span className="feed-video-copy">
+                          <strong>{video.title}</strong>
+                          <span>{video.duration > 0 ? formatTime(video.duration) : 'Duration loads during playback'}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
-
-        <button className="btn-primary feed-start-btn" onClick={onStartFeed} disabled={!canStartFeed}>
-          Start Feed
-        </button>
       </div>
     </section>
   );

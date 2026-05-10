@@ -24,7 +24,7 @@ interface RemixItem {
 export default function RemixPlayerPage() {
   const { remixId } = useParams<{ remixId: string }>();
   const navigate = useNavigate();
-  const { getRemix, getVideo, getInstance, updateClip, recordClipWatched } = useApp();
+  const { getRemix, getVideo, getInstance, updateClip, recordClipWatched, recordClipSummarized } = useApp();
   const remix = remixId ? getRemix(remixId) : undefined;
 
   const playerRef = useRef<PlayerRef>(null);
@@ -234,7 +234,11 @@ export default function RemixPlayerPage() {
   function handleSaveSummary(text: string) {
     const summaryItem = items[summaryClipIndex];
     if (!summaryItem) return;
+    const wasUnsummarized = !summaryItem.clip.summary.trim();
     updateClip(summaryItem.instance.id, summaryItem.clip.index, { summary: text });
+    if (wasUnsummarized) {
+      recordClipSummarized(summaryItem.video.id);
+    }
     setShowSummary(false);
   }
 
@@ -273,7 +277,7 @@ export default function RemixPlayerPage() {
   const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipProgress)) * 100);
 
   return (
-    <div className="player-page remix-player-page">
+    <div className="cw-page player-page remix-player-page">
       <aside className="player-sidebar remix-sidebar">
         <button className="back-btn" onClick={() => navigate('/')}>
           Back to Dashboard

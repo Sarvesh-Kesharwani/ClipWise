@@ -27,6 +27,15 @@ function emptyAppData(): AppData {
     remixes: [],
     featureRequests: [],
     feedLists: [],
+    feedSettings: {
+      lastListId: null,
+      lastFolderId: null,
+      sourceFolderIds: [],
+      clipSize: 30,
+      autoStart: true,
+      preferSound: false,
+      includeSubfolders: true,
+    },
     progress: emptyProgress(),
   };
 }

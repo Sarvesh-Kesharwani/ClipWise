@@ -4,6 +4,7 @@ import { storeVideoFile, extractVideoMetadata } from '../utils/videoDb';
 import { extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle, isPlaylistUrl, extractPlaylistId, fetchPlaylistVideoIds } from '../utils/youtube';
 import { fetchYouLearnVideos, isYouLearnSpaceUrl } from '../utils/youlearn';
 import { generateId } from '../utils/helpers';
+import { getFolderDepth, getFolderOptions } from '../utils/folders';
 
 interface Props {
   onClose: () => void;
@@ -19,6 +20,7 @@ export default function AddVideoModal({ onClose }: Props) {
   const [playlistProgress, setPlaylistProgress] = useState<{ current: number; total: number } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState(folders[0]?.id ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
+  const folderOptions = getFolderOptions(folders);
 
   async function handleLocalFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -58,14 +60,13 @@ export default function AddVideoModal({ onClose }: Props) {
       return;
     }
 
-    // Check if it's a playlist URL
-    if (isPlaylistUrl(youtubeUrl)) {
-      await handlePlaylist();
-      return;
-    }
-
     const videoId = extractYouTubeId(youtubeUrl);
     if (!videoId) {
+      if (isPlaylistUrl(youtubeUrl)) {
+        await handlePlaylist();
+        return;
+      }
+
       setError('Invalid URL. Paste a YouTube video/playlist or public YouLearn space/playlist link.');
       return;
     }
@@ -173,6 +174,7 @@ export default function AddVideoModal({ onClose }: Props) {
           externalUrl: video.externalUrl,
           youlearnContentId: video.contentId,
           youlearnSpaceUrl: youtubeUrl,
+          youlearnTranscript: video.transcript,
           duration: video.duration,
           thumbnail: video.thumbnail,
           createdAt: Date.now(),
@@ -223,8 +225,10 @@ export default function AddVideoModal({ onClose }: Props) {
               value={selectedFolderId}
               onChange={e => setSelectedFolderId(e.target.value)}
             >
-              {folders.map(f => (
-                <option key={f.id} value={f.id}>{f.name}</option>
+              {folderOptions.map(folder => (
+                <option key={folder.id} value={folder.id}>
+                  {`${'  '.repeat(getFolderDepth(folder, folders))}${folder.name}`}
+                </option>
               ))}
             </select>
           </div>

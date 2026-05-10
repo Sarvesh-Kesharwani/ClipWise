@@ -1,19 +1,27 @@
 import { useNavigate } from 'react-router-dom';
 import MobileNav from '../components/MobileNav';
+import TopBar from '../components/dashboard/TopBar';
 import { useApp } from '../store/useApp';
 import { computeAverageDailyClips, getTodaySnapshot } from '../utils/progress';
 
 export default function ReportsPage() {
   const navigate = useNavigate();
-  const { progress } = useApp();
+  const { progress, cloudSync, featureRequests } = useApp();
   const snapshot = getTodaySnapshot(progress);
   const daily = progress.daily.slice(-30);
   const average = computeAverageDailyClips(progress);
   const totalClips = progress.daily.reduce((sum, day) => sum + day.clipsCompleted, 0);
   const maxClips = Math.max(1, ...daily.map(day => day.clipsCompleted), ...daily.map(day => day.target));
+  const requestsOpen = featureRequests.filter(request => !request.completed).length;
 
   return (
-    <div className="reports-page app-page-with-mobile-nav">
+    <div className="cw-page reports-page app-page-with-mobile-nav">
+      <TopBar
+        freezes={snapshot.freezes}
+        requestsCount={requestsOpen}
+        profile={cloudSync.userProfile}
+      />
+
       <header className="reports-header">
         <button className="back-btn reports-back" onClick={() => navigate('/')}>Dashboard</button>
         <div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import YouTubePlayer from '../YouTubePlayer';
 import type { PlayerRef, Video } from '../../types';
 import { formatTime } from '../../utils/helpers';
@@ -10,9 +10,11 @@ interface Props {
   clipSize: number;
   clips: FeedClip[];
   activeClipId: string;
+  preferSound?: boolean;
   onActiveClipChange: (clipId: string) => void;
   onExit: () => void;
   onHome: () => void;
+  onSettings?: () => void;
   onClipComplete: (videoId: string) => void;
 }
 
@@ -21,9 +23,11 @@ export default function ClipPlayer({
   clipSize,
   clips,
   activeClipId,
+  preferSound = false,
   onActiveClipChange,
   onExit,
   onHome,
+  onSettings,
   onClipComplete,
 }: Props) {
   const effectiveActiveClipId = activeClipId || clips[0]?.id || '';
@@ -44,7 +48,14 @@ export default function ClipPlayer({
           <strong>{listName}</strong>
           <span>{clipSize}s clips</span>
         </div>
-        <button className="feed-icon-btn" onClick={onHome} aria-label="Dashboard">Home</button>
+        <div className="feed-reels-topbar-actions">
+          {onSettings && (
+            <button className="feed-icon-btn" onClick={onSettings} aria-label="Feed settings" title="Feed settings">
+              &#9881;
+            </button>
+          )}
+          <button className="feed-icon-btn" onClick={onHome} aria-label="Dashboard">Home</button>
+        </div>
       </div>
 
       <div className="feed-reels-scroll" aria-label={`${listName} feed`}>
@@ -56,6 +67,7 @@ export default function ClipPlayer({
             clipNumber={index + 1}
             totalClips={clips.length}
             active={effectiveActiveClipId === clip.id}
+            preferSound={preferSound}
             preload={effectiveActiveClipId === clip.id || clips[index - 1]?.id === effectiveActiveClipId || clips[index + 1]?.id === effectiveActiveClipId}
             onActive={() => onActiveClipChange(clip.id)}
             onPrev={() => scrollToClip(-1)}
@@ -74,6 +86,7 @@ function FeedClipCard({
   clipNumber,
   totalClips,
   active,
+  preferSound,
   preload,
   onActive,
   onPrev,
@@ -85,6 +98,7 @@ function FeedClipCard({
   clipNumber: number;
   totalClips: number;
   active: boolean;
+  preferSound: boolean;
   preload: boolean;
   onActive: () => void;
   onPrev: () => void;
@@ -95,9 +109,19 @@ function FeedClipCard({
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const youtubeRef = useRef<PlayerRef>(null);
   const completedRef = useRef(false);
-  const [localSrc, setLocalSrc] = useState('');
+  const progressRef = useRef<HTMLDivElement>(null);
+  const defaultMuted = !preferSound;
+  const mutedRef = useRef(defaultMuted);
+  const [mediaSrc, setMediaSrc] = useState('');
   const [paused, setPaused] = useState(true);
+  const [muted, setMuted] = useState(defaultMuted);
   const [currentTime, setCurrentTime] = useState(clip.startTime);
+  const [scrubbing, setScrubbing] = useState(false);
+
+  const setMutedState = useCallback((value: boolean) => {
+    mutedRef.current = value;
+    setMuted(value);
+  }, []);
 
   useEffect(() => {
     completedRef.current = false;
@@ -115,42 +139,69 @@ function FeedClipCard({
   }, [onActive]);
 
   useEffect(() => {
-    if (clip.video.source !== 'local' || !preload) return;
+    if (!preload) return;
+
+    if (clip.video.source === 'youlearn') {
+      queueMicrotask(() => setMediaSrc(clip.video.externalUrl ?? ''));
+      return () => setMediaSrc('');
+    }
+
+    if (clip.video.source !== 'local') return;
+
     let revoked = false;
     getVideoFile(clip.video.id).then(file => {
       if (!file || revoked) return;
       const url = URL.createObjectURL(file);
-      setLocalSrc(previous => {
+      setMediaSrc(previous => {
         if (previous) URL.revokeObjectURL(previous);
         return url;
       });
     });
     return () => {
       revoked = true;
-      setLocalSrc(previous => {
+      setMediaSrc(previous => {
         if (previous) URL.revokeObjectURL(previous);
         return '';
       });
     };
-  }, [clip.video.id, clip.video.source, preload]);
+  }, [clip.video.externalUrl, clip.video.id, clip.video.source, preload]);
 
   useEffect(() => {
     if (!active) {
       localVideoRef.current?.pause();
       youtubeRef.current?.pause();
-      queueMicrotask(() => setPaused(true));
+      if (localVideoRef.current) localVideoRef.current.muted = true;
+      youtubeRef.current?.mute?.();
+      mutedRef.current = defaultMuted;
+      queueMicrotask(() => {
+        setMuted(defaultMuted);
+        setPaused(true);
+      });
       return;
     }
 
-    if (clip.video.source === 'local' && localVideoRef.current) {
+    if ((clip.video.source === 'local' || clip.video.source === 'youlearn') && localVideoRef.current && mediaSrc) {
       localVideoRef.current.currentTime = clip.startTime;
-      void localVideoRef.current.play().then(() => setPaused(false)).catch(() => setPaused(true));
+      localVideoRef.current.muted = mutedRef.current;
+      void localVideoRef.current.play()
+        .then(() => setPaused(false))
+        .catch(() => {
+          if (!localVideoRef.current || localVideoRef.current.muted) {
+            setPaused(true);
+            return;
+          }
+          localVideoRef.current.muted = true;
+          setMutedState(true);
+          void localVideoRef.current.play().then(() => setPaused(false)).catch(() => setPaused(true));
+        });
     } else if (clip.video.source === 'youtube') {
+      if (mutedRef.current) youtubeRef.current?.mute?.();
+      else youtubeRef.current?.unMute?.();
       youtubeRef.current?.seek(clip.startTime);
       youtubeRef.current?.play();
       queueMicrotask(() => setPaused(false));
     }
-  }, [active, clip.startTime, clip.video.source]);
+  }, [active, clip.startTime, clip.video.source, mediaSrc, defaultMuted, setMutedState]);
 
   function completeClip() {
     if (completedRef.current) return;
@@ -158,16 +209,103 @@ function FeedClipCard({
     onClipComplete(clip.video.id);
   }
 
-  function togglePlay() {
-    if (clip.video.source === 'local') {
+  function playMedia() {
+    if (clip.video.source === 'local' || clip.video.source === 'youlearn') {
       const player = localVideoRef.current;
       if (!player) return;
+      void player.play().then(() => setPaused(false)).catch(() => setPaused(true));
+      return;
+    }
+
+    youtubeRef.current?.play();
+    setPaused(false);
+  }
+
+  function pauseMedia() {
+    localVideoRef.current?.pause();
+    youtubeRef.current?.pause();
+    setPaused(true);
+  }
+
+  function seekTo(time: number) {
+    const nextTime = Math.max(clip.startTime, Math.min(clip.endTime - 0.05, time));
+    setCurrentTime(nextTime);
+    if (clip.video.source === 'local' || clip.video.source === 'youlearn') {
+      if (localVideoRef.current) localVideoRef.current.currentTime = nextTime;
+    } else {
+      youtubeRef.current?.seek(nextTime);
+    }
+  }
+
+  function seekFromClientX(clientX: number) {
+    const track = progressRef.current;
+    if (!track) return;
+    const rect = track.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width)));
+    seekTo(clip.startTime + pct * clip.duration);
+  }
+
+  function handleMediaTap() {
+    if (!active) return;
+    if (paused) playMedia();
+    else pauseMedia();
+  }
+
+  function handleProgressPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!active) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setScrubbing(true);
+    seekFromClientX(event.clientX);
+  }
+
+  function handleProgressPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!scrubbing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    seekFromClientX(event.clientX);
+  }
+
+  function handleProgressPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!scrubbing) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setScrubbing(false);
+    seekFromClientX(event.clientX);
+  }
+
+  function togglePlay() {
+    if (clip.video.source === 'local' || clip.video.source === 'youlearn') {
+      const player = localVideoRef.current;
+      if (!player) return;
+      if (player.muted) {
+        player.muted = false;
+        setMutedState(false);
+        if (player.paused) {
+          void player.play().then(() => setPaused(false)).catch(() => setPaused(true));
+        } else {
+          setPaused(false);
+        }
+        return;
+      }
       if (player.paused) {
-        void player.play().then(() => setPaused(false));
+        void player.play().then(() => setPaused(false)).catch(() => setPaused(true));
       } else {
         player.pause();
         setPaused(true);
       }
+      return;
+    }
+
+    if (muted) {
+      youtubeRef.current?.unMute?.();
+      youtubeRef.current?.play();
+      setMutedState(false);
+      setPaused(false);
       return;
     }
 
@@ -195,14 +333,34 @@ function FeedClipCard({
   return (
     <section ref={cardRef} id={clip.id} className="feed-clip-card">
       <div className="feed-media-frame">
-        {clip.video.source === 'local' ? (
-          preload && localSrc ? (
+        {clip.video.source === 'local' || clip.video.source === 'youlearn' ? (
+          preload && mediaSrc ? (
             <video
               ref={localVideoRef}
               className="feed-local-video"
-              src={localSrc}
+              src={mediaSrc}
               preload={active ? 'auto' : 'metadata'}
+              autoPlay={active}
+              muted={muted}
               playsInline
+              onLoadedMetadata={event => {
+                const player = event.currentTarget;
+                player.currentTime = clip.startTime;
+                player.muted = muted;
+                if (active) {
+                  void player.play()
+                    .then(() => setPaused(false))
+                    .catch(() => {
+                      if (player.muted) {
+                        setPaused(true);
+                        return;
+                      }
+                      player.muted = true;
+                      setMutedState(true);
+                      void player.play().then(() => setPaused(false)).catch(() => setPaused(true));
+                    });
+                }
+              }}
               onTimeUpdate={event => handleTimeUpdate(event.currentTarget.currentTime)}
               onPlay={() => setPaused(false)}
               onPause={() => setPaused(true)}
@@ -214,6 +372,8 @@ function FeedClipCard({
           <YouTubePlayer
             ref={youtubeRef}
             videoId={clip.video.youtubeId!}
+            autoPlay={active}
+            muted={muted}
             onTimeUpdate={handleTimeUpdate}
             onPlay={() => setPaused(false)}
             onPause={() => setPaused(true)}
@@ -229,8 +389,22 @@ function FeedClipCard({
           <FeedPoster video={clip.video} />
         )}
 
+        <button className="feed-tap-zone" type="button" aria-label={paused ? 'Play clip' : 'Pause clip'} onClick={handleMediaTap} />
         <div className="feed-gradient" />
-        <div className="feed-progress-track">
+        <div
+          ref={progressRef}
+          className={`feed-progress-track ${scrubbing ? 'scrubbing' : ''}`}
+          role="slider"
+          aria-label="Clip progress"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(clip.duration)}
+          aria-valuenow={Math.round(Math.max(0, currentTime - clip.startTime))}
+          tabIndex={0}
+          onPointerDown={handleProgressPointerDown}
+          onPointerMove={handleProgressPointerMove}
+          onPointerUp={handleProgressPointerUp}
+          onPointerCancel={handleProgressPointerUp}
+        >
           <div className="feed-progress-fill" style={{ width: `${progress}%` }} />
         </div>
 
@@ -242,8 +416,8 @@ function FeedClipCard({
 
         <div className="feed-overlay-controls">
           <button className="feed-control-btn" onClick={onPrev} aria-label="Previous clip">Prev</button>
-          <button className="feed-play-btn" onClick={togglePlay} aria-label={paused ? 'Play clip' : 'Pause clip'}>
-            {paused ? 'Play' : 'Pause'}
+          <button className="feed-play-btn" onClick={togglePlay} aria-label={muted ? 'Turn sound on' : paused ? 'Play clip' : 'Pause clip'}>
+            {muted ? 'Sound' : paused ? 'Play' : 'Pause'}
           </button>
           <button className="feed-control-btn" onClick={onNext} aria-label="Next clip">Next</button>
         </div>

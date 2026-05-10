@@ -1,6 +1,17 @@
 import { createContext } from 'react';
-import type { Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList, ProgressState } from '../types';
-import type { GoogleUserProfile } from '../utils/googleDriveSync';
+import type { Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList, FeedSettings, ProgressState } from '../types';
+import type { BackupListing, GoogleUserProfile } from '../utils/googleDriveSync';
+
+export interface RestoreResult {
+  ok: boolean;
+  error?: string;
+  /** Counts from the data we just restored (videos / instances / folders). */
+  restored?: { videos: number; instances: number; folders: number };
+  /** Backup file we restored from. */
+  fromName?: string;
+  /** Snapshot we made of the previous primary, if any. */
+  snapshotName?: string;
+}
 
 export type CloudSyncStatus = 'idle' | 'signing-in' | 'syncing' | 'loading' | 'restoring' | 'error';
 
@@ -23,6 +34,7 @@ export interface AppContextType {
   remixes: Remix[];
   featureRequests: FeatureRequest[];
   feedLists: FeedList[];
+  feedSettings: FeedSettings;
   progress: ProgressState;
   cloudSync: CloudSyncState;
   addVideo: (video: Video) => void;
@@ -50,13 +62,17 @@ export interface AppContextType {
   renameFeedList: (listId: string, name: string) => void;
   deleteFeedList: (listId: string) => void;
   setFeedListVideos: (listId: string, videoIds: string[]) => void;
+  updateFeedSettings: (settings: Partial<FeedSettings>) => void;
   recordClipWatched: (videoId: string) => void;
+  recordClipSummarized: (videoId: string) => void;
   useStreakFreeze: () => void;
   resetProgress: () => void;
   signInWithGoogle: () => Promise<void>;
   signOutGoogle: () => Promise<void>;
   syncToGoogleDrive: () => Promise<void>;
   loadFromGoogleDrive: () => Promise<void>;
+  listDriveBackups: () => Promise<BackupListing>;
+  restoreDriveBackup: (date?: string) => Promise<RestoreResult>;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

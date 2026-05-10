@@ -1,4 +1,13 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+interface ApiRequest {
+  method?: string;
+  url?: string;
+}
+
+interface ApiResponse {
+  statusCode: number;
+  setHeader(name: string, value: string): void;
+  end(body?: string): void;
+}
 
 interface YouLearnContent {
   type?: string;
@@ -9,13 +18,26 @@ interface YouLearnContent {
   _id?: string;
   length?: number;
   duration?: number;
+  transcript?: YouLearnTranscriptSegment[];
+}
+
+interface YouLearnTranscriptChunk {
+  page_content?: string;
+  source?: number;
+  idx?: number;
+}
+
+interface YouLearnTranscriptSegment {
+  index: number;
+  startTime: number;
+  text: string;
 }
 
 interface YouLearnSpaceResponse {
   contents?: YouLearnContent[];
 }
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   const requestUrl = new URL(req.url ?? '/', 'http://localhost');
   const spaceId = requestUrl.searchParams.get('spaceId');
 
@@ -40,14 +62,14 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     }
 
     const data = await response.json() as YouLearnSpaceResponse;
-    sendJson(res, 200, { contents: normalizeContents(data.contents ?? []) });
+    sendJson(res, 200, { contents: await normalizeContents(data.contents ?? []) });
   } catch {
     sendJson(res, 502, { error: 'Could not reach YouLearn.' });
   }
 }
 
-function normalizeContents(contents: YouLearnContent[]) {
-  return contents
+async function normalizeContents(contents: YouLearnContent[]) {
+  const videos = contents
     .filter(content => content.type === 'video' && typeof content.content_url === 'string')
     .map(content => ({
       type: 'video',
@@ -57,13 +79,55 @@ function normalizeContents(contents: YouLearnContent[]) {
       content_id: content.content_id ?? content._id,
       length: normalizeDuration(content.length ?? content.duration),
     }));
+
+  return Promise.all(videos.map(async video => ({
+    ...video,
+    transcript: video.content_id ? await fetchTranscript(video.content_id) : undefined,
+  })));
+}
+
+async function fetchTranscript(contentId: string): Promise<YouLearnTranscriptSegment[] | undefined> {
+  try {
+    const response = await fetch('https://api.youlearn.ai/content/transcript', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'x-platform': 'web',
+        Referer: 'https://app.youlearn.ai/',
+      },
+      body: JSON.stringify({ user_id: 'anonymous', content_id: contentId }),
+    });
+
+    if (!response.ok) return undefined;
+    const chunks = await response.json() as YouLearnTranscriptChunk[];
+    return normalizeTranscript(chunks);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeTranscript(chunks: YouLearnTranscriptChunk[]): YouLearnTranscriptSegment[] | undefined {
+  const transcript = chunks
+    .map((chunk, fallbackIndex) => ({
+      index: typeof chunk.idx === 'number' ? chunk.idx : fallbackIndex,
+      startTime: normalizeTime(chunk.source),
+      text: typeof chunk.page_content === 'string' ? chunk.page_content.trim() : '',
+    }))
+    .filter(segment => segment.text);
+
+  return transcript.length > 0 ? transcript : undefined;
 }
 
 function normalizeDuration(value: number | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
 }
 
-function sendJson(res: ServerResponse, statusCode: number, body: unknown) {
+function normalizeTime(value: number | undefined): number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function sendJson(res: ApiResponse, statusCode: number, body: unknown) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');

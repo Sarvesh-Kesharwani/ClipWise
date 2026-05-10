@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import type { AppData, Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList } from '../types';
+import type { AppData, Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList, FeedSettings } from '../types';
 import { AppContext } from './AppContextValue';
-import type { CloudSyncState } from './AppContextValue';
+import type { CloudSyncState, RestoreResult } from './AppContextValue';
 import {
   clearAppData,
   clearCloudSession,
@@ -12,17 +12,23 @@ import {
 } from '../utils/storage';
 import { generateClipsForDuration, generateId } from '../utils/helpers';
 import { emptyProgress, ensureProgress, recordClipCompletion } from '../utils/progress';
+import { getDescendantFolderIds } from '../utils/folders';
 import { clearAllVideoFiles } from '../utils/videoDb';
 import {
+  backupPreviousPrimary,
   createDrivePayload,
   downloadSyncPayload,
   fetchGoogleUserProfile,
   findSyncFile,
   getGoogleClientId,
+  listDriveBackupsViaApi,
   requestGoogleDriveToken,
+  resetBackupFolderCache,
+  restoreDriveBackupViaApi,
   saveSyncPayload,
   TokenExpiredError,
 } from '../utils/googleDriveSync';
+import type { BackupListing } from '../utils/googleDriveSync';
 const GOOGLE_CLIENT_ID = getGoogleClientId();
 
 function createDefaultFolder(): Folder {
@@ -33,6 +39,18 @@ function createDefaultFolder(): Folder {
   };
 }
 
+function defaultFeedSettings(): FeedSettings {
+  return {
+    lastListId: null,
+    lastFolderId: null,
+    sourceFolderIds: [],
+    clipSize: 30,
+    autoStart: true,
+    preferSound: false,
+    includeSubfolders: true,
+  };
+}
+
 function migrateAppData(data: AppData): AppData {
   let migrated: AppData = {
     ...data,
@@ -40,6 +58,7 @@ function migrateAppData(data: AppData): AppData {
     remixes: Array.isArray(data.remixes) ? data.remixes : [],
     featureRequests: Array.isArray(data.featureRequests) ? data.featureRequests : [],
     feedLists: Array.isArray(data.feedLists) ? data.feedLists : [],
+    feedSettings: { ...defaultFeedSettings(), ...(data.feedSettings ?? {}) },
     progress: ensureProgress(data.progress),
   };
 
@@ -221,11 +240,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [setDataWithLocalChange]);
 
   /**
-   * Mark a clip-watch as a completion event: bumps daily progress, the video's
-   * lastWatchedAt, and (if applicable) the streak. Idempotent at the call site
-   * — the player decides when to call this exactly once per clip per session.
+   * Mark a clip as watched: only updates the video's lastWatchedAt timestamp.
+   * Daily progress is NOT incremented here — only summarized clips count
+   * toward the daily target (see recordClipSummarized).
    */
   const recordClipWatched = useCallback((videoId: string) => {
+    const now = Date.now();
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      videos: prev.videos.map(v => v.id === videoId ? { ...v, lastWatchedAt: now } : v),
+    }));
+  }, [setDataWithLocalChange]);
+
+  /**
+   * Record a summarized clip: bumps daily progress, lastWatchedAt, and
+   * (if applicable) the streak. Caller ensures one call per clip per save.
+   */
+  const recordClipSummarized = useCallback((videoId: string) => {
     const now = Date.now();
     setDataWithLocalChange(prev => ({
       ...prev,
@@ -280,14 +311,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const deleteFolder = useCallback((folderId: string) => {
     setDataWithLocalChange(prev => {
-      const remaining = prev.folders.filter(f => f.id !== folderId);
+      const deletedIds = new Set([folderId, ...getDescendantFolderIds(prev.folders, folderId)]);
+      const remaining = prev.folders.filter(f => !deletedIds.has(f.id));
       const fallbackId = remaining[0]?.id ?? null;
       return {
         ...prev,
         folders: remaining,
         videos: prev.videos.map(v =>
-          v.folderId === folderId ? { ...v, folderId: fallbackId ?? undefined } : v
+          v.folderId && deletedIds.has(v.folderId) ? { ...v, folderId: fallbackId ?? undefined } : v
         ),
+        feedSettings: {
+          ...(prev.feedSettings ?? defaultFeedSettings()),
+          lastFolderId: prev.feedSettings?.lastFolderId && deletedIds.has(prev.feedSettings.lastFolderId)
+            ? fallbackId
+            : prev.feedSettings?.lastFolderId ?? null,
+          sourceFolderIds: (prev.feedSettings?.sourceFolderIds ?? []).filter(id => !deletedIds.has(id)),
+        },
       };
     });
   }, [setDataWithLocalChange]);
@@ -372,6 +411,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [setDataWithLocalChange]);
 
+  const updateFeedSettings = useCallback((settings: Partial<FeedSettings>) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      feedSettings: { ...(prev.feedSettings ?? defaultFeedSettings()), ...settings },
+    }));
+  }, [setDataWithLocalChange]);
+
   const setFeedListVideos = useCallback((listId: string, videoIds: string[]) => {
     const uniqueVideoIds = Array.from(new Set(videoIds));
     setDataWithLocalChange(prev => ({
@@ -391,6 +437,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       remixes: [],
       featureRequests: [],
       feedLists: [],
+      feedSettings: defaultFeedSettings(),
       progress: emptyProgress(),
     };
     clearAppData();
@@ -412,6 +459,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       remixes: [],
       featureRequests: [],
       feedLists: [],
+      feedSettings: defaultFeedSettings(),
       progress: emptyProgress(),
     };
     setData(emptyData);
@@ -471,6 +519,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const existingFile = await findSyncFile(token);
           fileId = existingFile?.id ?? null;
           syncFileIdRef.current = fileId;
+        }
+
+        // Best-effort: snapshot the *previous* primary before overwriting it.
+        // Failures here must not block the user's normal sync.
+        if (fileId) {
+          try {
+            const previous = await downloadSyncPayload(token, fileId);
+            if (previous) await backupPreviousPrimary(token, previous);
+          } catch (backupErr) {
+            console.warn('[clipwise] backup before overwrite failed:', backupErr);
+          }
         }
 
         const payload = createDrivePayload(dataRef.current, dataUpdatedAtRef.current);
@@ -604,6 +663,92 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [persistCloudSession, refreshToken]);
 
+  const listDriveBackups = useCallback(async (): Promise<BackupListing> => {
+    let token = accessTokenRef.current;
+    if (!token) {
+      throw new Error('Sign in with Google before listing backups.');
+    }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        return await listDriveBackupsViaApi(token);
+      } catch (error) {
+        if (error instanceof TokenExpiredError && attempt === 0) {
+          const newToken = await refreshToken();
+          if (newToken) { token = newToken; continue; }
+          throw new Error('Session expired. Please sign in again.');
+        }
+        throw error;
+      }
+    }
+    throw new Error('Could not list Drive backups.');
+  }, [refreshToken]);
+
+  const restoreDriveBackup = useCallback(async (date?: string): Promise<RestoreResult> => {
+    let token = accessTokenRef.current;
+    if (!token) {
+      return { ok: false, error: 'Sign in with Google before restoring a backup.' };
+    }
+
+    const targetLabel = date ?? 'yesterday';
+    setCloudSync(prev => ({ ...prev, status: 'restoring', message: `Restoring backup from ${targetLabel}...` }));
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const restored = await restoreDriveBackupViaApi(token, date);
+        if (!restored.ok || !restored.payload) {
+          const message = restored.error ?? 'Restore failed.';
+          setCloudSync(prev => ({ ...prev, status: 'error', message }));
+          return { ok: false, error: message };
+        }
+
+        // Hydrate local state.
+        const migrated = migrateAppData(restored.payload.data);
+        syncFileIdRef.current = restored.fileId ?? syncFileIdRef.current;
+        lastCloudSavedAtRef.current = restored.payload.savedAt;
+        driveRestoreReadyRef.current = true;
+        setData(migrated);
+        setDataUpdatedAt(restored.payload.savedAt);
+        const syncedAt = Date.now();
+        persistCloudSession({
+          accessToken: token,
+          fileId: syncFileIdRef.current,
+          lastSyncedAt: syncedAt,
+          lastSavedDataAt: restored.payload.savedAt,
+        });
+        setCloudSync(prev => ({
+          ...prev,
+          fileId: syncFileIdRef.current,
+          hasPendingChanges: false,
+          requiresDriveRestore: false,
+          status: 'idle',
+          message: `Restored ${restored.fromName ?? 'backup'}.`,
+          lastSyncedAt: syncedAt,
+        }));
+
+        return {
+          ok: true,
+          fromName: restored.fromName,
+          snapshotName: restored.snapshotName,
+          restored: restored.restored ?? {
+            videos: migrated.videos.length,
+            instances: migrated.instances.length,
+            folders: migrated.folders.length,
+          },
+        };
+      } catch (error) {
+        if (error instanceof TokenExpiredError && attempt === 0) {
+          const newToken = await refreshToken();
+          if (newToken) { token = newToken; continue; }
+          return { ok: false, error: 'Session expired. Please sign in again.' };
+        }
+        const message = error instanceof Error ? error.message : 'Restore failed.';
+        setCloudSync(prev => ({ ...prev, status: 'error', message }));
+        return { ok: false, error: message };
+      }
+    }
+    return { ok: false, error: 'Restore failed after retry.' };
+  }, [persistCloudSession, refreshToken]);
+
   const signInWithGoogle = useCallback(async () => {
     driveRestoreReadyRef.current = false;
     setCloudSync(prev => ({
@@ -712,6 +857,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     syncFileIdRef.current = null;
     lastCloudSavedAtRef.current = null;
     driveRestoreReadyRef.current = true;
+    resetBackupFolderCache();
     clearCloudSession();
     clearLocalData();
     setCloudSync(prev => ({
@@ -806,6 +952,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       remixes: data.remixes,
       featureRequests: data.featureRequests,
       feedLists: data.feedLists,
+      feedSettings: data.feedSettings ?? defaultFeedSettings(),
       progress: data.progress,
       cloudSync,
       addVideo, deleteVideo, updateVideo,
@@ -816,12 +963,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addRemix, updateRemix, deleteRemix, getRemix,
       addFeatureRequest, toggleFeatureRequestComplete, deleteFeatureRequest,
       addFeedList, renameFeedList, deleteFeedList, setFeedListVideos,
-      recordClipWatched, useStreakFreeze,
+      updateFeedSettings,
+      recordClipWatched, recordClipSummarized, useStreakFreeze,
       resetProgress,
       signInWithGoogle,
       signOutGoogle,
       syncToGoogleDrive,
       loadFromGoogleDrive,
+      listDriveBackups,
+      restoreDriveBackup,
     }}>
       {children}
       {showDriveRestoreOverlay && (

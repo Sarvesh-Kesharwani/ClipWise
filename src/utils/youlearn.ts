@@ -4,6 +4,13 @@ export interface YouLearnVideoImport {
   duration: number;
   thumbnail?: string;
   contentId?: string;
+  transcript?: YouLearnTranscriptSegment[];
+}
+
+export interface YouLearnTranscriptSegment {
+  index: number;
+  startTime: number;
+  text: string;
 }
 
 interface YouLearnContent {
@@ -16,6 +23,7 @@ interface YouLearnContent {
   length?: number;
   duration?: number;
   visibility?: string;
+  transcript?: YouLearnTranscriptSegment[];
 }
 
 interface YouLearnSpaceResponse {
@@ -56,6 +64,14 @@ export async function fetchYouLearnVideos(url: string): Promise<YouLearnVideoImp
   return normalizeYouLearnVideos(data);
 }
 
+export async function fetchYouLearnTranscript(contentId: string): Promise<YouLearnTranscriptSegment[]> {
+  const response = await fetch(`/api/youlearn-transcript?contentId=${encodeURIComponent(contentId)}`);
+  if (!response.ok) return [];
+
+  const data = await response.json() as { transcript?: YouLearnTranscriptSegment[] };
+  return Array.isArray(data.transcript) ? data.transcript : [];
+}
+
 function normalizeYouLearnVideos(data: YouLearnSpaceResponse): YouLearnVideoImport[] {
   const seen = new Set<string>();
   return (data.contents ?? [])
@@ -66,6 +82,7 @@ function normalizeYouLearnVideos(data: YouLearnSpaceResponse): YouLearnVideoImpo
       duration: normalizeDuration(content.length ?? content.duration),
       thumbnail: content.thumbnail_url,
       contentId: content.content_id ?? content._id,
+      transcript: Array.isArray(content.transcript) ? content.transcript : undefined,
     }))
     .filter(video => {
       if (seen.has(video.externalUrl)) return false;
