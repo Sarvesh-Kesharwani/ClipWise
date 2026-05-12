@@ -38,7 +38,6 @@ interface TokenClientConfig {
   client_id: string;
   scope: string;
   prompt?: string;
-  redirect_uri?: string;
   callback: (response: TokenResponse) => void;
   error_callback?: (error: unknown) => void;
 }
@@ -127,10 +126,9 @@ export async function requestGoogleDriveToken(clientId: string, silent = false):
       client_id: clientId,
       scope: DRIVE_APPDATA_SCOPE,
       prompt: promptMode,
-      redirect_uri: window.location.origin,
       callback: (response) => {
         if (response.error) {
-          reject(new Error(`${response.error_description || response.error} Origin: ${window.location.origin}. Client ID: ${clientId}`));
+          reject(new Error(formatGoogleAuthError(response.error_description || response.error)));
           return;
         }
 
@@ -141,11 +139,27 @@ export async function requestGoogleDriveToken(clientId: string, silent = false):
 
         resolve(response.access_token);
       },
-      error_callback: reject,
+      error_callback: error => reject(new Error(formatGoogleAuthError(error))),
     });
 
     tokenClient?.requestAccessToken({ prompt: promptMode });
   });
+}
+
+function formatGoogleAuthError(error: unknown): string {
+  const raw = typeof error === 'string'
+    ? error
+    : error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : 'Google sign-in failed.';
+  const origin = window.location.origin;
+  const lower = raw.toLowerCase();
+
+  if (lower.includes('redirect_uri_mismatch') || lower.includes('origin') || lower.includes('not allowed')) {
+    return `Google OAuth rejected this app origin (${origin}). Add this exact URL to the OAuth client's Authorized JavaScript origins.`;
+  }
+
+  return `${raw} Origin: ${origin}.`;
 }
 
 export function revokeGoogleDriveToken(accessToken: string): Promise<void> {
