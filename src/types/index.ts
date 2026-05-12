@@ -1,9 +1,13 @@
 export interface Video {
   id: string;
   title: string;
-  source: 'local' | 'youtube';
+  source: 'local' | 'youtube' | 'youlearn';
   youtubeId?: string;
   youtubeUrl?: string;
+  externalUrl?: string;
+  youlearnContentId?: string;
+  youlearnSpaceUrl?: string;
+  youlearnTranscript?: TranscriptSegment[];
   duration: number;
   thumbnail?: string;
   createdAt: number;
@@ -16,6 +20,17 @@ export interface Folder {
   id: string;
   name: string;
   createdAt: number;
+  parentId?: string;
+}
+
+export interface FeedSettings {
+  lastListId: string | null;
+  lastFolderId?: string | null;
+  sourceFolderIds?: string[];
+  clipSize: number;
+  autoStart?: boolean;
+  preferSound?: boolean;
+  includeSubfolders?: boolean;
 }
 
 export interface FeatureRequest {
@@ -103,12 +118,21 @@ export interface AppData {
   featureRequests: FeatureRequest[];
   feedLists: FeedList[];
   progress: ProgressState;
+  feedSettings?: FeedSettings;
 }
 
 export interface PlayerRef {
   seek: (time: number) => void;
   play: () => void;
   pause: () => void;
+  mute?: () => void;
+  unMute?: () => void;
+}
+
+export interface TranscriptSegment {
+  index: number;
+  startTime: number;
+  text: string;
 }
 
 export interface PlayerProps {

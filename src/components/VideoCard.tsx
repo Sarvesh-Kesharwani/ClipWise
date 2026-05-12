@@ -16,6 +16,7 @@ export default function VideoCard({ video, instances, onClick }: Props) {
     (sum, inst) => sum + inst.clips.filter(c => c.summary).length, 0
   );
   const watchedPct = totalClips > 0 ? Math.round((watchedClips / totalClips) * 100) : 0;
+  const sourceLabel = getSourceLabel(video.source);
 
   return (
     <div className="video-card" onClick={onClick}>
@@ -24,11 +25,11 @@ export default function VideoCard({ video, instances, onClick }: Props) {
           <img src={video.thumbnail} alt={video.title} />
         ) : (
           <div className="thumbnail-placeholder">
-            <span>{video.source === 'youtube' ? '▶' : '🎬'}</span>
+            <span>{video.source === 'local' ? 'FILE' : 'PLAY'}</span>
           </div>
         )}
         <div className="source-badge">
-          {video.source === 'youtube' ? 'YouTube' : 'Local'}
+          {sourceLabel}
         </div>
       </div>
       <div className="card-body">
@@ -54,6 +55,12 @@ export default function VideoCard({ video, instances, onClick }: Props) {
       </div>
     </div>
   );
+}
+
+function getSourceLabel(source: Video['source']): string {
+  if (source === 'youtube') return 'YouTube';
+  if (source === 'youlearn') return 'YouLearn';
+  return 'Local';
 }
 
 function formatWatchDate(ms: number): string {

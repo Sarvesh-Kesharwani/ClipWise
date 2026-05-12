@@ -2,7 +2,9 @@ import { useState, useRef } from 'react';
 import { useApp } from '../store/useApp';
 import { storeVideoFile, extractVideoMetadata } from '../utils/videoDb';
 import { extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle, isPlaylistUrl, extractPlaylistId, fetchPlaylistVideoIds } from '../utils/youtube';
+import { fetchYouLearnVideos, isYouLearnSpaceUrl } from '../utils/youlearn';
 import { generateId } from '../utils/helpers';
+import { getFolderDepth, getFolderOptions } from '../utils/folders';
 
 interface Props {
   onClose: () => void;
@@ -18,6 +20,7 @@ export default function AddVideoModal({ onClose }: Props) {
   const [playlistProgress, setPlaylistProgress] = useState<{ current: number; total: number } | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState(folders[0]?.id ?? '');
   const fileRef = useRef<HTMLInputElement>(null);
+  const folderOptions = getFolderOptions(folders);
 
   async function handleLocalFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -52,15 +55,19 @@ export default function AddVideoModal({ onClose }: Props) {
   async function handleYouTube() {
     if (!youtubeUrl.trim()) return;
 
-    // Check if it's a playlist URL
-    if (isPlaylistUrl(youtubeUrl)) {
-      await handlePlaylist();
+    if (isYouLearnSpaceUrl(youtubeUrl)) {
+      await handleYouLearn();
       return;
     }
 
     const videoId = extractYouTubeId(youtubeUrl);
     if (!videoId) {
-      setError('Invalid YouTube URL. Please paste a valid YouTube video or playlist link.');
+      if (isPlaylistUrl(youtubeUrl)) {
+        await handlePlaylist();
+        return;
+      }
+
+      setError('Invalid URL. Paste a YouTube video/playlist or public YouLearn space/playlist link.');
       return;
     }
 
@@ -142,6 +149,50 @@ export default function AddVideoModal({ onClose }: Props) {
     }
   }
 
+  async function handleYouLearn() {
+    setLoading(true);
+    setError('');
+    setPlaylistProgress(null);
+
+    try {
+      const videos = await fetchYouLearnVideos(youtubeUrl);
+
+      if (videos.length === 0) {
+        setError('No public videos found in this YouLearn space or playlist.');
+        setLoading(false);
+        return;
+      }
+
+      setPlaylistProgress({ current: 0, total: videos.length });
+
+      for (let i = 0; i < videos.length; i++) {
+        const video = videos[i];
+        addVideo({
+          id: generateId(),
+          title: video.title,
+          source: 'youlearn',
+          externalUrl: video.externalUrl,
+          youlearnContentId: video.contentId,
+          youlearnSpaceUrl: youtubeUrl,
+          youlearnTranscript: video.transcript,
+          duration: video.duration,
+          thumbnail: video.thumbnail,
+          createdAt: Date.now(),
+          folderId: selectedFolderId || undefined,
+        });
+
+        setPlaylistProgress({ current: i + 1, total: videos.length });
+      }
+
+      onClose();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to process YouLearn link.');
+    } finally {
+      setLoading(false);
+      setPlaylistProgress(null);
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={e => e.stopPropagation()}>
@@ -161,7 +212,7 @@ export default function AddVideoModal({ onClose }: Props) {
             className={`tab ${tab === 'youtube' ? 'active' : ''}`}
             onClick={() => { setTab('youtube'); setError(''); }}
           >
-            YouTube
+            Link
           </button>
         </div>
 
@@ -174,8 +225,10 @@ export default function AddVideoModal({ onClose }: Props) {
               value={selectedFolderId}
               onChange={e => setSelectedFolderId(e.target.value)}
             >
-              {folders.map(f => (
-                <option key={f.id} value={f.id}>{f.name}</option>
+              {folderOptions.map(folder => (
+                <option key={folder.id} value={folder.id}>
+                  {`${'  '.repeat(getFolderDepth(folder, folders))}${folder.name}`}
+                </option>
               ))}
             </select>
           </div>
@@ -205,7 +258,7 @@ export default function AddVideoModal({ onClose }: Props) {
               <input
                 type="url"
                 className="input"
-                placeholder="Video or playlist URL..."
+                placeholder="YouTube or public YouLearn URL..."
                 value={youtubeUrl}
                 onChange={e => setYoutubeUrl(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleYouTube()}

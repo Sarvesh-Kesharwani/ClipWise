@@ -11,6 +11,7 @@ import type { Clip, PlayerRef } from '../types';
 import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
 import { formatTime } from '../utils/helpers';
+import { fetchYouLearnTranscript } from '../utils/youlearn';
 
 const CELEBRATION_DURATION_MS = 1600;
 const SUMMARY_PROMPT_DELAY_MS = 900;
@@ -18,7 +19,7 @@ const SUMMARY_PROMPT_DELAY_MS = 900;
 export default function PlayerPage() {
   const { instanceId } = useParams<{ instanceId: string }>();
   const navigate = useNavigate();
-  const { getInstance, getVideo, updateClip, generateClips, updateVideo, recordClipWatched } = useApp();
+  const { getInstance, getVideo, updateClip, generateClips, updateVideo, recordClipWatched, recordClipSummarized } = useApp();
 
   const instance = getInstance(instanceId!);
   const video = instance ? getVideo(instance.videoId) : null;
@@ -98,7 +99,7 @@ export default function PlayerPage() {
     setTimeout(() => { seekingRef.current = false; }, 500);
   }
 
-  // Load local video file from IndexedDB
+  // Load file-backed or external video source.
   useEffect(() => {
     if (!video) return;
 
@@ -112,6 +113,11 @@ export default function PlayerPage() {
         } else {
           setLoading(false);
         }
+      });
+    } else if (video.source === 'youlearn') {
+      queueMicrotask(() => {
+        setVideoSrc(video.externalUrl ?? '');
+        setLoading(false);
       });
     } else {
       queueMicrotask(() => setLoading(false));
@@ -131,6 +137,20 @@ export default function PlayerPage() {
       updateVideo({ ...video, duration });
     }
   }, [video, duration, updateVideo]);
+
+  useEffect(() => {
+    if (!video || video.source !== 'youlearn' || !video.youlearnContentId || video.youlearnTranscript?.length) return;
+    let cancelled = false;
+
+    fetchYouLearnTranscript(video.youlearnContentId).then(transcript => {
+      if (cancelled || transcript.length === 0) return;
+      updateVideo({ ...video, youlearnTranscript: transcript });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [video, updateVideo]);
 
   useEffect(() => {
     return () => {
@@ -255,7 +275,12 @@ export default function PlayerPage() {
 
   function handleSaveSummary(text: string) {
     if (summaryClipIndex >= 0 && instance) {
+      const previous = clips[summaryClipIndex];
+      const wasUnsummarized = !previous?.summary?.trim();
       updateClip(instance.id, summaryClipIndex, { summary: text });
+      if (wasUnsummarized) {
+        recordClipSummarized(instance.videoId);
+      }
     }
     setShowSummary(false);
   }
@@ -283,10 +308,15 @@ export default function PlayerPage() {
   const summaryRequiredClip = clips[activeClipIndex];
   const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
   const currentClip = clips[activeClipIndex];
+  const currentTranscript = video?.youlearnTranscript?.length && currentClip
+    ? video.youlearnTranscript.filter(segment =>
+      segment.startTime >= currentClip.startTime && segment.startTime < currentClip.endTime
+    )
+    : [];
   const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipWatchProgress)) * 100);
 
   return (
-    <div className="player-page">
+    <div className="cw-page player-page">
       <div className="player-sidebar">
         <button className="back-btn" onClick={() => navigate('/')}>
           ← Dashboard
@@ -319,7 +349,7 @@ export default function PlayerPage() {
 
       <div className="player-main">
         <div className="player-video-container">
-          {video.source === 'local' ? (
+          {video.source === 'local' || video.source === 'youlearn' ? (
             <LocalPlayer
               ref={playerRef}
               src={videoSrc}
@@ -387,6 +417,13 @@ export default function PlayerPage() {
         {clips[activeClipIndex] && clips[activeClipIndex].summary && (
           <div className="current-clip-summary">
             <strong>Clip {activeClipIndex + 1} summary:</strong> {clips[activeClipIndex].summary}
+          </div>
+        )}
+
+        {currentTranscript.length > 0 && (
+          <div className="current-clip-transcript">
+            <strong>Transcript:</strong>
+            <p>{currentTranscript.map(segment => segment.text).join(' ')}</p>
           </div>
         )}
       </div>

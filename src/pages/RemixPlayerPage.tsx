@@ -24,7 +24,7 @@ interface RemixItem {
 export default function RemixPlayerPage() {
   const { remixId } = useParams<{ remixId: string }>();
   const navigate = useNavigate();
-  const { getRemix, getVideo, getInstance, updateClip, recordClipWatched } = useApp();
+  const { getRemix, getVideo, getInstance, updateClip, recordClipWatched, recordClipSummarized } = useApp();
   const remix = remixId ? getRemix(remixId) : undefined;
 
   const playerRef = useRef<PlayerRef>(null);
@@ -158,6 +158,13 @@ export default function RemixPlayerPage() {
         }
         setLoading(false);
       });
+    } else if (currentItem.video.source === 'youlearn') {
+      queueMicrotask(() => {
+        if (!cancelled) {
+          setVideoSrc(currentItem.video.externalUrl ?? '');
+          setLoading(false);
+        }
+      });
     } else {
       queueMicrotask(() => {
         if (!cancelled) {
@@ -227,7 +234,11 @@ export default function RemixPlayerPage() {
   function handleSaveSummary(text: string) {
     const summaryItem = items[summaryClipIndex];
     if (!summaryItem) return;
+    const wasUnsummarized = !summaryItem.clip.summary.trim();
     updateClip(summaryItem.instance.id, summaryItem.clip.index, { summary: text });
+    if (wasUnsummarized) {
+      recordClipSummarized(summaryItem.video.id);
+    }
     setShowSummary(false);
   }
 
@@ -266,7 +277,7 @@ export default function RemixPlayerPage() {
   const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipProgress)) * 100);
 
   return (
-    <div className="player-page remix-player-page">
+    <div className="cw-page player-page remix-player-page">
       <aside className="player-sidebar remix-sidebar">
         <button className="back-btn" onClick={() => navigate('/')}>
           Back to Dashboard
@@ -300,7 +311,7 @@ export default function RemixPlayerPage() {
         </div>
 
         <div className="player-video-container">
-          {currentItem.video.source === 'local' ? (
+          {currentItem.video.source === 'local' || currentItem.video.source === 'youlearn' ? (
             <LocalPlayer
               key={currentItem.ref.id}
               ref={playerRef}

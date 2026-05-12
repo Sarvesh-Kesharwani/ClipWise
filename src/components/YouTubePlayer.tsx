@@ -4,15 +4,18 @@ import { loadYouTubeAPI } from '../utils/youtube';
 
 interface Props extends PlayerProps {
   videoId: string;
+  autoPlay?: boolean;
+  muted?: boolean;
 }
 
 const YouTubePlayer = forwardRef<PlayerRef, Props>(
-  ({ videoId, onTimeUpdate, onPlay, onPause, onReady, onEnded }, ref) => {
+  ({ videoId, autoPlay = false, muted = false, onTimeUpdate, onPlay, onPause, onReady, onEnded }, ref) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playerRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const pollRef = useRef<number>(0);
     const mountedRef = useRef(true);
+    const optionsRef = useRef({ autoPlay, muted });
 
     // Keep latest callbacks in refs so the YT player always uses current versions
     const callbacksRef = useRef({ onTimeUpdate, onPlay, onPause, onReady, onEnded });
@@ -21,12 +24,21 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
       callbacksRef.current = { onTimeUpdate, onPlay, onPause, onReady, onEnded };
     }, [onTimeUpdate, onPlay, onPause, onReady, onEnded]);
 
+    useEffect(() => {
+      optionsRef.current = { autoPlay, muted };
+      if (!playerRef.current) return;
+      if (muted) playerRef.current.mute?.();
+      else playerRef.current.unMute?.();
+    }, [autoPlay, muted]);
+
     useImperativeHandle(ref, () => ({
       seek: (t: number) => {
         playerRef.current?.seekTo(t, true);
       },
       play: () => { playerRef.current?.playVideo(); },
       pause: () => { playerRef.current?.pauseVideo(); },
+      mute: () => { playerRef.current?.mute?.(); },
+      unMute: () => { playerRef.current?.unMute?.(); },
     }));
 
     const handleStateChange = useCallback((state: number) => {
@@ -63,17 +75,20 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
           width: '100%',
           height: '100%',
           playerVars: {
-            autoplay: 0,
+            autoplay: optionsRef.current.autoPlay ? 1 : 0,
             controls: 1,
             modestbranding: 1,
             rel: 0,
             fs: 1,
             playsinline: 1,
+            mute: optionsRef.current.muted ? 1 : 0,
           },
           events: {
-            onReady: (e: { target: { getDuration: () => number } }) => {
+            onReady: (e: { target: { getDuration: () => number; mute?: () => void; playVideo?: () => void } }) => {
               if (mountedRef.current) {
+                if (optionsRef.current.muted) e.target.mute?.();
                 callbacksRef.current.onReady(e.target.getDuration());
+                if (optionsRef.current.autoPlay) e.target.playVideo?.();
               }
             },
             onStateChange: (e: { data: number }) => {
