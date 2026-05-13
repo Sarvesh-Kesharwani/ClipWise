@@ -470,9 +470,6 @@ html[data-theme="light"] body:has(.cw-page) { background: #fafaf7; }
   gap: 0;
   background-image: none;
 }
-@media (max-width: 900px) {
-  .cw-page.player-page { grid-template-columns: 1fr; }
-}
 .cw-page.player-page .player-sidebar {
   background: var(--cw-panel);
   border-right: 1px solid var(--cw-line);
@@ -487,6 +484,19 @@ html[data-theme="light"] body:has(.cw-page) { background: #fafaf7; }
   background: var(--cw-bg);
   padding: 22px 28px;
   color: var(--cw-ink);
+}
+@media (max-width: 900px) {
+  .cw-page.player-page { grid-template-columns: 1fr; }
+  .cw-page.player-page .player-main {
+    order: 1;
+  }
+  .cw-page.player-page .player-sidebar {
+    order: 2;
+    min-height: 0;
+    max-height: none;
+    border-right: 0;
+    border-top: 1px solid var(--cw-line);
+  }
 }
 
 /* ===== Generic text elements that pages use ===== */
@@ -593,10 +603,15 @@ html[data-theme="light"] body:has(.cw-page) { background: #fafaf7; }
 /* When a card *inside* the modal has its own inner background, keep it
    readable in both themes. */
 .modal .instance-card,
+.modal .clip-size-launch,
 .modal .create-form {
   background: var(--bg);
   color: var(--text);
   border-color: var(--border);
+}
+.modal .clip-size-option.has-progress .clip-size-launch {
+  background: rgba(88, 204, 2, 0.08);
+  border-color: rgba(88, 204, 2, 0.45);
 }
 
 /* Dashboard restore overlay also needs the reset */

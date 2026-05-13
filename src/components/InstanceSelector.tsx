@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store/useApp';
 import type { Instance, Video } from '../types';
@@ -9,42 +8,48 @@ interface Props {
   onClose: () => void;
 }
 
+const CLIP_SIZES = [1, 2, 3, 5, 10, 15];
+
 export default function InstanceSelector({ videoId, onClose }: Props) {
   const navigate = useNavigate();
   const { getVideo, getInstancesForVideo, addInstance, deleteVideo, deleteInstance } = useApp();
   const video = getVideo(videoId);
   const instances = getInstancesForVideo(videoId);
 
-  const [showCreate, setShowCreate] = useState(false);
-  const [name, setName] = useState('');
-  const [clipSize, setClipSize] = useState(2);
-
   if (!video) return null;
 
-  function handleCreate() {
-    if (!name.trim()) return;
+  function getInstanceForSize(size: number) {
+    return instances
+      .filter(inst => inst.clipSizeMinutes === size)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+  }
 
+  function createInstance(size: number) {
     const clips = video!.duration > 0
-      ? generateClipsForDuration(video!.duration, clipSize)
+      ? generateClipsForDuration(video!.duration, size)
       : [];
 
     const instance: Instance = {
       id: generateId(),
       videoId,
-      name: name.trim(),
-      clipSizeMinutes: clipSize,
+      name: `${size} min clips`,
+      clipSizeMinutes: size,
       clips,
       createdAt: currentTimestamp(),
     };
 
     addInstance(instance);
-    setShowCreate(false);
-    setName('');
+    return instance;
   }
 
   function handleOpen(instanceId: string) {
     onClose();
     navigate(`/player/${instanceId}`);
+  }
+
+  function handleClipSize(size: number) {
+    const instance = getInstanceForSize(size) ?? createInstance(size);
+    handleOpen(instance.id);
   }
 
   function getProgress(inst: Instance) {
@@ -59,6 +64,8 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
     };
   }
 
+  const customInstances = instances.filter(inst => !CLIP_SIZES.includes(inst.clipSizeMinutes));
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal instance-modal" onClick={e => e.stopPropagation()}>
@@ -72,15 +79,60 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
           {video.duration > 0 ? formatDuration(video.duration) : 'Duration detected on play'}
         </p>
 
-        <div className="instances-list">
-          {instances.length === 0 && !showCreate && (
-            <div className="empty-instances">
-              <p>No instances yet!</p>
-              <p className="hint">Create one to start watching in clips.</p>
-            </div>
-          )}
+        <div className="clip-size-launcher">
+          <div className="clip-size-launcher-header">
+            <h3>Choose clip size</h3>
+            <p>Tap a size to start studying. ClipWise will reuse existing progress for that size.</p>
+          </div>
+          <div className="clip-size-option-grid">
+            {CLIP_SIZES.map(size => {
+              const inst = getInstanceForSize(size);
+              const p = inst ? getProgress(inst) : null;
+              const total = p?.total || (video.duration > 0 ? Math.ceil(video.duration / (size * 60)) : null);
 
-          {instances.map(inst => {
+              return (
+                <div key={size} className={`clip-size-option ${inst ? 'has-progress' : ''}`}>
+                  <button className="clip-size-launch" onClick={() => handleClipSize(size)}>
+                    <strong>{size} min</strong>
+                    <span>
+                      {inst
+                        ? `${p?.watched ?? 0}/${p?.total || '?'} watched`
+                        : total
+                          ? `${total} clips`
+                          : 'Start'}
+                    </span>
+                    {p && p.total > 0 && (
+                      <span className="instance-progress">
+                        <span className="mini-progress-bar">
+                          <span className="mini-progress-watched" style={{ width: `${p.pct}%` }} />
+                          <span
+                            className="mini-progress-summarized"
+                            style={{ width: `${Math.round((p.summarized / p.total) * 100)}%` }}
+                          />
+                        </span>
+                        <span className="instance-pct">{p.pct}%</span>
+                      </span>
+                    )}
+                  </button>
+                  {inst && (
+                    <button
+                      className="clip-size-delete"
+                      onClick={(e) => { e.stopPropagation(); deleteInstance(inst.id); }}
+                      title={`Delete ${size} minute clip progress`}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {customInstances.length > 0 && (
+          <div className="instances-list">
+            <h3 className="instances-list-title">Other saved sessions</h3>
+            {customInstances.map(inst => {
             const p = getProgress(inst);
             return (
               <div key={inst.id} className="instance-card">
@@ -113,47 +165,7 @@ export default function InstanceSelector({ videoId, onClose }: Props) {
                 </button>
               </div>
             );
-          })}
-        </div>
-
-        {!showCreate ? (
-          <button className="btn-primary btn-full" onClick={() => setShowCreate(true)}>
-            + New Instance
-          </button>
-        ) : (
-          <div className="create-form">
-            <input
-              className="input"
-              type="text"
-              placeholder="Instance name (e.g., First Pass, Deep Review)"
-              value={name}
-              onChange={e => setName(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()}
-              autoFocus
-            />
-            <div className="clip-size-picker">
-              <label>Clip size (minutes):</label>
-              <div className="size-buttons">
-                {[1, 2, 3, 5, 10, 15].map(size => (
-                  <button
-                    key={size}
-                    className={`size-btn ${clipSize === size ? 'active' : ''}`}
-                    onClick={() => setClipSize(size)}
-                  >
-                    {size}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="form-actions">
-              <button className="btn-secondary" onClick={() => setShowCreate(false)}>Cancel</button>
-              <button className="btn-primary" onClick={handleCreate} disabled={!name.trim()}>
-                Create
-              </button>
-            </div>
-            <p className="form-note">
-              Clip size cannot be changed after creation. Create a new instance for a different size.
-            </p>
+            })}
           </div>
         )}
 
