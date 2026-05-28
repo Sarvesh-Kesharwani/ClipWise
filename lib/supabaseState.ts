@@ -4,8 +4,7 @@ declare const process: {
   env: Record<string, string | undefined>;
 };
 
-const DEFAULT_SCHEMA_NAME = 'clipwise';
-const TABLE_NAME = 'app_state';
+const TABLE_NAME = 'clipwise_app_state';
 
 interface AppStateRow {
   id: string;
@@ -38,13 +37,8 @@ export function getStateId() {
   return process.env.SUPABASE_APP_STATE_ID || 'primary';
 }
 
-function getSchemaName() {
-  return process.env.SUPABASE_SCHEMA || DEFAULT_SCHEMA_NAME;
-}
-
 export async function loadAppState() {
   const { data, error } = await getSupabase()
-    .schema(getSchemaName())
     .from(TABLE_NAME)
     .select('id,data,saved_at,updated_at')
     .eq('id', getStateId())
@@ -62,7 +56,6 @@ export async function saveAppState(data: unknown, savedAt: number) {
   };
 
   const { data: saved, error } = await getSupabase()
-    .schema(getSchemaName())
     .from(TABLE_NAME)
     .upsert(row, { onConflict: 'id' })
     .select('id,data,saved_at,updated_at')
