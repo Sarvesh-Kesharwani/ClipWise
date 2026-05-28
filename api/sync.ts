@@ -1,8 +1,20 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
-import { AUTH_COOKIE_NAME, parseCookie, verifyAuthToken } from '../lib/auth';
-import { loadAppState, saveAppState } from '../lib/supabaseState';
+import { AUTH_COOKIE_NAME, parseCookie, verifyAuthToken } from '../lib/auth.js';
+import { loadAppState, saveAppState } from '../lib/supabaseState.js';
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+interface ApiRequest extends AsyncIterable<Uint8Array | string> {
+  method?: string;
+  headers: {
+    cookie?: string;
+  };
+}
+
+interface ApiResponse {
+  statusCode: number;
+  setHeader(name: string, value: string): void;
+  end(body?: string): void;
+}
+
+export default async function handler(req: ApiRequest, res: ApiResponse) {
   const authed = await verifyAuthToken(parseCookie(req.headers.cookie, AUTH_COOKIE_NAME));
   if (!authed) {
     sendJson(res, 401, { error: 'Unauthorized.' });
@@ -46,20 +58,27 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   sendJson(res, 405, { error: 'Method not allowed.' });
 }
 
-async function readJson(req: IncomingMessage) {
-  const chunks: Buffer[] = [];
+async function readJson(req: ApiRequest) {
+  const chunks: Uint8Array[] = [];
   for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    chunks.push(typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk);
   }
   if (chunks.length === 0) return {};
   try {
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>;
+    const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+    const body = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return JSON.parse(new TextDecoder().decode(body)) as Record<string, unknown>;
   } catch {
     return {};
   }
 }
 
-function sendJson(res: ServerResponse, statusCode: number, body: unknown) {
+function sendJson(res: ApiResponse, statusCode: number, body: unknown) {
   res.statusCode = statusCode;
   res.setHeader('Content-Type', 'application/json');
   res.setHeader('Cache-Control', 'no-store');

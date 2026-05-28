@@ -1,5 +1,9 @@
 import { SignJWT, jwtVerify } from 'jose';
 
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
 export const AUTH_COOKIE_NAME = 'app_auth';
 export const AUTH_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 

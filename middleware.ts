@@ -1,5 +1,5 @@
 import { next } from '@vercel/functions';
-import { AUTH_COOKIE_NAME, parseCookie, verifyAuthToken } from './lib/auth';
+import { AUTH_COOKIE_NAME, parseCookie, verifyAuthToken } from './lib/auth.js';
 
 const PUBLIC_FILE = /\.(?:js|css|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|map|txt|json)$/i;
 

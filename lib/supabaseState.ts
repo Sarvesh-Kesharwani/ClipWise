@@ -1,5 +1,9 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+declare const process: {
+  env: Record<string, string | undefined>;
+};
+
 const DEFAULT_SCHEMA_NAME = 'clipwise';
 const TABLE_NAME = 'app_state';
 
