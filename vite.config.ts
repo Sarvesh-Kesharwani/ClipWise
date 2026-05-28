@@ -1,6 +1,8 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
-import driveRestoreHandler from './api/drive/restore'
+import authHandler from './api/auth'
+import syncHandler from './api/sync'
+import { AUTH_COOKIE_NAME, parseCookie, verifyAuthToken } from './lib/auth'
 
 interface YouLearnContent {
   type?: string;
@@ -27,6 +29,35 @@ function youLearnDevApi(): Plugin {
   return {
     name: 'youlearn-dev-api',
     configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+        if (isDevPublicPath(pathname)) {
+          next();
+          return;
+        }
+
+        const authed = await verifyAuthToken(parseCookie(req.headers.cookie, AUTH_COOKIE_NAME));
+        if (authed) {
+          next();
+          return;
+        }
+
+        if (pathname.startsWith('/api/')) {
+          res.statusCode = 401;
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Cache-Control', 'no-store');
+          res.end(JSON.stringify({ error: 'Unauthorized.' }));
+          return;
+        }
+
+        const nextPath = `${pathname}${new URL(req.url ?? '/', 'http://localhost').search}`;
+        res.statusCode = 302;
+        res.setHeader('Location', `/login?next=${encodeURIComponent(nextPath)}`);
+        res.end();
+      });
+
+      server.middlewares.use('/api/auth', authHandler);
+      server.middlewares.use('/api/sync', syncHandler);
       server.middlewares.use('/api/youlearn-space', async (req, res) => {
         const requestUrl = new URL(req.url ?? '/', 'http://localhost');
         const spaceId = requestUrl.searchParams.get('spaceId');
@@ -82,9 +113,21 @@ function youLearnDevApi(): Plugin {
         }
       });
 
-      server.middlewares.use('/api/drive/restore', driveRestoreHandler);
     },
   }
+}
+
+function isDevPublicPath(pathname: string) {
+  return pathname === '/login'
+    || pathname === '/api/auth'
+    || pathname === '/favicon.ico'
+    || pathname === '/vite.svg'
+    || pathname.startsWith('/assets/')
+    || pathname.startsWith('/src/')
+    || pathname.startsWith('/@vite')
+    || pathname.startsWith('/@react-refresh')
+    || pathname.startsWith('/node_modules/')
+    || /\.[a-z0-9]+$/i.test(pathname);
 }
 
 async function normalizeContents(contents: YouLearnContent[]) {

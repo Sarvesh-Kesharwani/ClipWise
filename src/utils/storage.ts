@@ -1,5 +1,5 @@
 import type { AppData } from '../types';
-import type { GoogleUserProfile } from './googleDriveSync';
+import type { CloudUserProfile } from './supabaseSync';
 import { emptyProgress } from './progress';
 
 const STORAGE_KEY = 'clipwise-data';
@@ -12,11 +12,10 @@ export interface StoredAppData {
 }
 
 export interface StoredCloudSession {
-  accessToken: string;
   fileId: string | null;
   lastSyncedAt: number | null;
   lastSavedDataAt: number | null;
-  userProfile: GoogleUserProfile | null;
+  userProfile: CloudUserProfile | null;
 }
 
 function emptyAppData(): AppData {
