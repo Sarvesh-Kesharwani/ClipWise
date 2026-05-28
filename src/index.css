@@ -369,6 +369,96 @@ input, textarea {
   max-width: 560px;
 }
 
+.clip-size-launcher {
+  margin: 18px 0 20px;
+}
+
+.clip-size-launcher-header {
+  margin-bottom: 12px;
+}
+
+.clip-size-launcher-header h3,
+.instances-list-title {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.clip-size-launcher-header p {
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.clip-size-option-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.clip-size-option {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.clip-size-launch {
+  min-height: 104px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px;
+  border: 2px solid var(--border);
+  border-bottom: 5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.clip-size-launch:hover {
+  border-color: var(--green);
+  box-shadow: var(--shadow);
+}
+.clip-size-launch:active {
+  transform: translateY(2px);
+  border-bottom-width: 3px;
+}
+.clip-size-option.has-progress .clip-size-launch {
+  background: rgba(88, 204, 2, 0.08);
+  border-color: rgba(88, 204, 2, 0.45);
+}
+.clip-size-launch strong {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 900;
+}
+.clip-size-launch > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.clip-size-delete {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+}
+.clip-size-delete:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
 .instances-list {
   margin: 16px 0 20px;
   display: flex;
@@ -3812,6 +3902,9 @@ input, textarea {
   .instance-card {
     flex-direction: column;
   }
+  .clip-size-option-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .instance-main {
     flex-direction: column;
   }
@@ -3925,7 +4018,7 @@ input, textarea {
     padding-bottom: 92px;
   }
   .player-sidebar {
-    max-height: 46vh;
+    max-height: none;
   }
   .player-main {
     padding: 12px 12px 18px;

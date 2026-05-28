@@ -1,17 +1,6 @@
 import { createContext } from 'react';
 import type { Video, Instance, Clip, Folder, Remix, FeatureRequest, FeedList, FeedSettings, ProgressState } from '../types';
-import type { BackupListing, GoogleUserProfile } from '../utils/googleDriveSync';
-
-export interface RestoreResult {
-  ok: boolean;
-  error?: string;
-  /** Counts from the data we just restored (videos / instances / folders). */
-  restored?: { videos: number; instances: number; folders: number };
-  /** Backup file we restored from. */
-  fromName?: string;
-  /** Snapshot we made of the previous primary, if any. */
-  snapshotName?: string;
-}
+import type { CloudUserProfile } from '../utils/supabaseSync';
 
 export type CloudSyncStatus = 'idle' | 'signing-in' | 'syncing' | 'loading' | 'restoring' | 'error';
 
@@ -24,7 +13,7 @@ export interface CloudSyncState {
   message: string;
   lastSyncedAt: number | null;
   fileId: string | null;
-  userProfile: GoogleUserProfile | null;
+  userProfile: CloudUserProfile | null;
 }
 
 export interface AppContextType {
@@ -67,12 +56,9 @@ export interface AppContextType {
   recordClipSummarized: (videoId: string) => void;
   useStreakFreeze: () => void;
   resetProgress: () => void;
-  signInWithGoogle: () => Promise<void>;
-  signOutGoogle: () => Promise<void>;
-  syncToGoogleDrive: () => Promise<void>;
-  loadFromGoogleDrive: () => Promise<void>;
-  listDriveBackups: () => Promise<BackupListing>;
-  restoreDriveBackup: (date?: string) => Promise<RestoreResult>;
+  signOut: () => Promise<void>;
+  syncToCloud: () => Promise<void>;
+  loadFromCloud: () => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

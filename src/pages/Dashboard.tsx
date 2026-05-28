@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApp } from '../store/useApp';
 import AddVideoModal from '../components/AddVideoModal';
 import InstanceSelector from '../components/InstanceSelector';
-import GoogleDriveSync from '../components/GoogleDriveSync';
+import CloudSync from '../components/CloudSync';
 import WatchMixModal from '../components/WatchMixModal';
 import RemixCard from '../components/RemixCard';
 import ResetProgressModal from '../components/ResetProgressModal';
@@ -37,8 +37,7 @@ export default function Dashboard() {
     progress,
     instances,
     cloudSync,
-    signInWithGoogle,
-    signOutGoogle,
+    signOut,
     getInstancesForVideo,
     getInstance,
     getVideo,
@@ -379,20 +378,14 @@ export default function Dashboard() {
       )}
       {showAccountMenu && (
         <div className="cw-floating-menu cw-floating-menu-account">
-          <GoogleDriveSync compact />
+          <CloudSync compact />
           <hr className="cw-floating-menu-divider" />
           <FeatureRequestMenu />
           <hr className="cw-floating-menu-divider" />
           <div className="cw-floating-menu-actions">
-            {cloudSync.isSignedIn ? (
-              <button className="cw-btn cw-btn-secondary" onClick={() => { void signOutGoogle(); setShowAccountMenu(false); }}>
-                Sign out
-              </button>
-            ) : (
-              <button className="cw-btn cw-btn-primary" onClick={() => { void signInWithGoogle(); setShowAccountMenu(false); }}>
-                Sign in with Google
-              </button>
-            )}
+            <button className="cw-btn cw-btn-secondary" onClick={() => { void signOut(); setShowAccountMenu(false); }}>
+              Logout
+            </button>
             <button
               className="cw-btn cw-btn-secondary cw-menu-danger"
               onClick={() => { setShowAccountMenu(false); setShowResetModal(true); }}

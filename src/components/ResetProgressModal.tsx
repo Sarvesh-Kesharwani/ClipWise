@@ -42,7 +42,7 @@ export default function ResetProgressModal({ onConfirm, onClose }: Props) {
                 watch progress, summaries, folders, and remixes.
               </p>
               <p>
-                If you have Google Drive sync enabled, your cloud backup will be
+                Your Supabase backup will be
                 overwritten with empty data on the next sync.
               </p>
             </div>

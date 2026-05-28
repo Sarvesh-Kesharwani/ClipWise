@@ -1006,7 +1006,7 @@ body:has(.cw-dashboard) { background: #0e0f0c; }
   .cw-clip-card:hover { transform: none; }
 }
 
-/* Drive backup restore card */
+/* Cloud backup restore card */
 .drive-backup-card {
   margin-top: 14px;
   padding: 12px 14px;
