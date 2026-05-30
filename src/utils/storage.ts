@@ -1,7 +1,7 @@
 import type { AppData } from '../types';
 import type { CloudUserProfile } from './supabaseSync';
 import { emptyProgress } from './progress';
-import { DEFAULT_USER_LIFE_CONTEXT } from './lifeRecommendations';
+import { DEFAULT_USER_LIFE_CONTEXT, normalizeUserLifeContext } from './lifeRecommendations';
 
 const STORAGE_KEY = 'clipwise-data';
 const STORAGE_UPDATED_AT_KEY = 'clipwise-data-updated-at';
@@ -55,7 +55,7 @@ export function loadStoredAppData(): StoredAppData {
     if (raw) {
       const data = JSON.parse(raw) as AppData;
       const updatedAt = Number(localStorage.getItem(STORAGE_UPDATED_AT_KEY)) || now();
-      return { data, updatedAt };
+      return { data: { ...data, userLifeContext: normalizeUserLifeContext(data.userLifeContext) }, updatedAt };
     }
   } catch (e) {
     console.error('Failed to load app data:', e);

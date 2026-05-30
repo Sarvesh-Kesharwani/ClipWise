@@ -21,6 +21,7 @@ import EmptyCard from '../components/dashboard/EmptyCard';
 import KeyboardHints from '../components/dashboard/KeyboardHints';
 
 import { generateId } from '../utils/helpers';
+import { CONTEXT_ABOUT_ME_NOTION_URL, DEFAULT_USER_LIFE_CONTEXT } from '../utils/lifeRecommendations';
 import { getTodaySnapshot, todayKey } from '../utils/progress';
 import type { Folder, Video } from '../types';
 
@@ -260,6 +261,10 @@ export default function Dashboard() {
     setShowLifeContextSettings(false);
   }
 
+  function useNotionProfileContext() {
+    setLifeContextDraft(DEFAULT_USER_LIFE_CONTEXT);
+  }
+
   const topLevelFolders = folders.filter(f => !f.parentId);
   const activeFolder = activeFolderSettingsId
     ? folders.find(folder => folder.id === activeFolderSettingsId)
@@ -455,6 +460,9 @@ export default function Dashboard() {
           <strong className="cw-floating-menu-title">Life context</strong>
           <label className="cw-folder-settings-field">
             <span>Used for recommendations</span>
+            <a className="cw-context-source-link" href={CONTEXT_ABOUT_ME_NOTION_URL} target="_blank" rel="noreferrer">
+              Notion context-about-me source
+            </a>
             <textarea
               value={lifeContextDraft}
               onChange={event => setLifeContextDraft(event.target.value)}
@@ -466,6 +474,9 @@ export default function Dashboard() {
             />
           </label>
           <div className="cw-folder-settings-actions">
+            <button className="cw-btn cw-btn-secondary" onClick={useNotionProfileContext}>
+              Use Notion profile
+            </button>
             <button className="cw-btn cw-btn-primary" onClick={saveLifeContext} disabled={!lifeContextDraft.trim()}>
               Save
             </button>

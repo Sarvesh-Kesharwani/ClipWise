@@ -224,6 +224,18 @@ input, textarea {
   text-transform: uppercase;
 }
 
+.life-recommendations-source {
+  width: fit-content;
+  color: var(--green-dark);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.life-recommendations-source:hover {
+  text-decoration: underline;
+}
+
 .life-recommendation {
   display: grid;
   grid-template-columns: 24px 1fr;

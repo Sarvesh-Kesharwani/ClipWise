@@ -1066,6 +1066,19 @@ body:has(.cw-dashboard) { background: #0e0f0c; }
   text-transform: uppercase;
 }
 
+.cw-context-source-link {
+  width: fit-content;
+  color: var(--cw-accent);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  text-transform: none;
+}
+
+.cw-context-source-link:hover {
+  text-decoration: underline;
+}
+
 .cw-folder-settings-field input,
 .cw-folder-settings-field textarea {
   min-height: 42px;

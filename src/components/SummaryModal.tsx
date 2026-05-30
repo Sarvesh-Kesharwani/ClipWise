@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
 import type { Clip } from '../types';
 import { formatTime } from '../utils/helpers';
-import { buildLifeRecommendations, DEFAULT_USER_LIFE_CONTEXT } from '../utils/lifeRecommendations';
+import {
+  buildLifeRecommendations,
+  CONTEXT_ABOUT_ME_NOTION_URL,
+  DEFAULT_USER_LIFE_CONTEXT,
+} from '../utils/lifeRecommendations';
 
 interface Props {
   clip: Clip;
@@ -57,7 +61,10 @@ export default function SummaryModal({
           rows={3}
         />
         <div className="life-recommendations">
-          <span className="life-recommendations-label">Personal use</span>
+          <span className="life-recommendations-label">Personal use from Notion context</span>
+          <a className="life-recommendations-source" href={CONTEXT_ABOUT_ME_NOTION_URL} target="_blank" rel="noreferrer">
+            context-about-me
+          </a>
           {recommendations.map((recommendation, index) => (
             <button
               key={recommendation}

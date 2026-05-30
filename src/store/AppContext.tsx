@@ -12,7 +12,7 @@ import {
 } from '../utils/storage';
 import { generateClipsForDuration, generateId } from '../utils/helpers';
 import { emptyProgress, ensureProgress, recordClipCompletion } from '../utils/progress';
-import { DEFAULT_USER_LIFE_CONTEXT } from '../utils/lifeRecommendations';
+import { DEFAULT_USER_LIFE_CONTEXT, normalizeUserLifeContext } from '../utils/lifeRecommendations';
 import { getDescendantFolderIds } from '../utils/folders';
 import { clearAllVideoFiles } from '../utils/videoDb';
 import {
@@ -51,9 +51,7 @@ function migrateAppData(data: AppData): AppData {
     feedLists: Array.isArray(data.feedLists) ? data.feedLists : [],
     feedSettings: { ...defaultFeedSettings(), ...(data.feedSettings ?? {}) },
     progress: ensureProgress(data.progress),
-    userLifeContext: typeof data.userLifeContext === 'string' && data.userLifeContext.trim()
-      ? data.userLifeContext
-      : DEFAULT_USER_LIFE_CONTEXT,
+    userLifeContext: normalizeUserLifeContext(data.userLifeContext),
   };
 
   // Ensure the app always has at least one folder to render into.
@@ -409,7 +407,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateUserLifeContext = useCallback((context: string) => {
     setDataWithLocalChange(prev => ({
       ...prev,
-      userLifeContext: context.trim() || DEFAULT_USER_LIFE_CONTEXT,
+      userLifeContext: normalizeUserLifeContext(context),
     }));
   }, [setDataWithLocalChange]);
 
