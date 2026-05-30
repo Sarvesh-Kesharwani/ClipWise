@@ -13,6 +13,7 @@ import { getVideoFile } from '../utils/videoDb';
 import { formatTime } from '../utils/helpers';
 import { fetchYouLearnTranscript } from '../utils/youlearn';
 import { fetchYouTubeTranscript } from '../utils/youtube';
+import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
 
 const CELEBRATION_DURATION_MS = 1600;
 const SUMMARY_PROMPT_DELAY_MS = 900;
@@ -305,6 +306,7 @@ export default function PlayerPage() {
         summary: text,
         lifeRecommendations,
         lifeContextSnapshot,
+        lifeRecommendationsVersion: LIFE_RECOMMENDATIONS_VERSION,
       });
       if (wasUnsummarized) {
         recordClipSummarized(instance.videoId);

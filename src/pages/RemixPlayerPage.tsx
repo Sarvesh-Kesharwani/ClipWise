@@ -11,6 +11,7 @@ import { formatTime } from '../utils/helpers';
 import { getVideoFile } from '../utils/videoDb';
 import { WatchTracker } from '../utils/watchTracker';
 import { fetchYouTubeTranscript } from '../utils/youtube';
+import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
 
 const CELEBRATION_DURATION_MS = 1600;
 const SUMMARY_PROMPT_DELAY_MS = 900;
@@ -263,6 +264,7 @@ export default function RemixPlayerPage() {
       summary: text,
       lifeRecommendations,
       lifeContextSnapshot,
+      lifeRecommendationsVersion: LIFE_RECOMMENDATIONS_VERSION,
     });
     if (wasUnsummarized) {
       recordClipSummarized(summaryItem.video.id);

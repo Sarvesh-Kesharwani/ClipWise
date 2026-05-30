@@ -67,6 +67,7 @@ export interface Clip {
   summary: string;
   lifeRecommendations?: string[];
   lifeContextSnapshot?: string;
+  lifeRecommendationsVersion?: number;
 }
 
 export interface RemixClipRef {

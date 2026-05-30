@@ -14,6 +14,7 @@ import { generateClipsForDuration, generateId } from '../utils/helpers';
 import { emptyProgress, ensureProgress, recordClipCompletion } from '../utils/progress';
 import {
   DEFAULT_USER_LIFE_CONTEXT,
+  LIFE_RECOMMENDATIONS_VERSION,
   isLegacyLifeRecommendation,
   normalizeUserLifeContext,
 } from '../utils/lifeRecommendations';
@@ -53,7 +54,11 @@ function migrateAppData(data: AppData): AppData {
       ? data.instances.map(instance => ({
           ...instance,
           clips: instance.clips.map(clip => (
-            clip.lifeRecommendations?.some(isLegacyLifeRecommendation)
+            clip.lifeRecommendations
+              && (
+                clip.lifeRecommendationsVersion !== LIFE_RECOMMENDATIONS_VERSION
+                || clip.lifeRecommendations.some(isLegacyLifeRecommendation)
+              )
               ? { ...clip, lifeRecommendations: undefined, lifeContextSnapshot: undefined }
               : clip
           )),
