@@ -69,8 +69,6 @@ export function buildLifeRecommendations(input: LifeRecommendationInput): string
   const combined = `${titleLower} ${transcriptLower}`;
   const hasTranscript = transcriptLower.length > 0;
 
-  if (!hasTranscript) return noTranscriptRecommendations();
-
   if (hasAny(combined, ['subagent', 'sub-agent', 'sub agent', 'subagents', 'ai workers', 'parallel', 'पैरेलल', 'पैरलल', 'सब एजेंट', 'सब-एजेंट'])) {
     return [
       'When working on Tubeo, split one feature into UI, sync, and testing subagents so development runs in parallel.',
@@ -174,6 +172,8 @@ export function buildLifeRecommendations(input: LifeRecommendationInput): string
       'Apply it at work by separating migration, data safety, and app-code changes before deployment.',
     ];
   }
+
+  if (!hasTranscript) return noTranscriptRecommendations();
 
   const snippet = cleanSnippet(input.clipText ?? '');
   const appName = contextLower.includes('tubeo') ? 'Tubeo' : 'ClipWise';
