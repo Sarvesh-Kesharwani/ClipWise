@@ -32,10 +32,9 @@ interface LifeRecommendationInput {
   lifeContext: string;
   videoTitle?: string;
   clipText?: string;
-  summary?: string;
 }
 
-function extractKeywords(text: string): string[] {
+function extractKeywords(text: string, limit = 4): string[] {
   const counts = new Map<string, number>();
   const words = text
     .toLowerCase()
@@ -50,39 +49,97 @@ function extractKeywords(text: string): string[] {
 
   return Array.from(counts.entries())
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 4)
+    .slice(0, limit)
     .map(([word]) => word);
 }
 
-function subjectFrom(input: LifeRecommendationInput): string {
-  const keywords = extractKeywords([
-    input.summary,
-    input.clipText,
-    input.videoTitle,
-  ].filter(Boolean).join(' '));
+function shortPoint(text: string): string {
+  const lower = text.toLowerCase();
 
-  if (keywords.length === 0) return 'this idea';
-  if (keywords.length === 1) return keywords[0];
-  return keywords.slice(0, 3).join(', ');
+  if (lower.includes('model context protocol') || /\bmcp\b/.test(lower)) {
+    return 'MCP client-server-tool structure';
+  }
+  if (lower.includes('client') && lower.includes('server')) {
+    return 'client-server responsibilities';
+  }
+  if (lower.includes('rag') || lower.includes('retrieval')) {
+    return 'RAG retrieval flow';
+  }
+  if (lower.includes('agent') || lower.includes('tool')) {
+    return 'agent tool-use flow';
+  }
+  if (lower.includes('prompt')) {
+    return 'prompt design pattern';
+  }
+  if (lower.includes('database') || lower.includes('supabase') || lower.includes('sql')) {
+    return 'database design choice';
+  }
+  if (lower.includes('architecture') || lower.includes('system')) {
+    return 'system architecture idea';
+  }
+
+  const keywords = extractKeywords(text, 3);
+  if (keywords.length === 0) return 'this clip point';
+  return keywords.join(' + ');
+}
+
+function transcriptPoints(clipText?: string, videoTitle?: string): string[] {
+  const text = clipText?.trim();
+  if (!text) return [];
+
+  const sentences = text
+    .replace(/\s+/g, ' ')
+    .replace(/[?!]/g, '.')
+    .split('.')
+    .map(sentence => sentence.trim())
+    .filter(sentence => sentence.length >= 24);
+
+  const source = sentences.length > 0 ? sentences : [text];
+  const titleWords = extractKeywords(videoTitle ?? '', 8);
+  const scored = source.map((sentence, index) => {
+    const lower = sentence.toLowerCase();
+    const keywordScore = extractKeywords(sentence, 8).length;
+    const titleScore = titleWords.filter(word => lower.includes(word)).length * 2;
+    const domainScore = [
+      'mcp', 'model context protocol', 'architecture', 'client', 'server',
+      'agent', 'tool', 'rag', 'retrieval', 'prompt', 'database', 'workflow',
+    ].filter(term => lower.includes(term)).length * 3;
+    return { sentence, score: keywordScore + titleScore + domainScore - index * 0.2 };
+  });
+
+  const points = scored
+    .sort((a, b) => b.score - a.score)
+    .map(item => shortPoint(item.sentence));
+
+  return Array.from(new Set(points)).slice(0, 3);
+}
+
+function padPoints(points: string[], videoTitle?: string): string[] {
+  const fallback = shortPoint(videoTitle ?? '');
+  const padded = [...points];
+  while (padded.length < 3) {
+    padded.push(fallback === 'this clip point' ? `clip point ${padded.length + 1}` : fallback);
+  }
+  return padded.slice(0, 3);
 }
 
 export function buildLifeRecommendations(input: LifeRecommendationInput): string[] {
   const context = normalizeUserLifeContext(input.lifeContext);
-  const subject = subjectFrom(input);
   const contextLower = context.toLowerCase();
-  const projectTarget = contextLower.includes('clipwise') || contextLower.includes('tubeo') || contextLower.includes('app')
-    ? 'a ClipWise, Tubeo, or personal productivity app decision'
-    : 'one current personal workflow';
-  const engineeringTarget = contextLower.includes('rag') || contextLower.includes('ai/ml') || contextLower.includes('gen ai')
-    ? 'your AI/ML, RAG, or automation work'
-    : 'your technical work';
-  const communicationTarget = contextLower.includes('english') || contextLower.includes('interview') || contextLower.includes('remote')
-    ? 'English work communication, interview answers, or remote-team updates'
-    : 'one real conversation';
+  const points = padPoints(transcriptPoints(input.clipText, input.videoTitle), input.videoTitle);
+  const appTarget = contextLower.includes('clipwise') || contextLower.includes('tubeo')
+    ? 'ClipWise/Tubeo'
+    : 'your app';
+  const workTarget = contextLower.includes('rag') || contextLower.includes('ai/ml') || contextLower.includes('gen ai')
+    ? 'AI/RAG work'
+    : 'technical work';
+  const communicationTarget = contextLower.includes('interview') || contextLower.includes('remote')
+    ? 'interviews or standups'
+    : 'a work update';
 
   return [
-    `Use ${subject} in ${projectTarget}: write a one-line decision note, then choose the smallest product action you can finish today.`,
-    `Apply ${subject} to ${engineeringTarget}: turn it into a debugging, prompt-design, or workflow-improvement checklist you can reuse at work.`,
-    `Practice ${subject} for ${communicationTarget}: say it as a short natural sentence you could use with a manager, teammate, interviewer, or study partner.`,
+    `Use ${points[0]} to plan one cleaner ${appTarget} feature flow.`,
+    `Turn ${points[1]} into a short checklist for ${workTarget}.`,
+    `Explain ${points[2]} as one project example in ${communicationTarget}.`,
   ];
 }

@@ -31,9 +31,8 @@ export default function SummaryModal({
       lifeContext,
       videoTitle,
       clipText,
-      summary: trimmedText,
     });
-  }, [clipText, lifeContext, trimmedText, videoTitle]);
+  }, [clipText, lifeContext, videoTitle]);
 
   function handleSave() {
     if (!trimmedText) return;
@@ -66,19 +65,13 @@ export default function SummaryModal({
             context-about-me
           </a>
           {recommendations.map((recommendation, index) => (
-            <button
+            <div
               key={recommendation}
-              type="button"
               className="life-recommendation"
-              onClick={() => setText(current => {
-                const base = current.trim();
-                const nextLine = `${index + 1}. ${recommendation}`;
-                return base ? `${base}\n\n${nextLine}` : nextLine;
-              })}
             >
               <strong>{index + 1}</strong>
               <span>{recommendation}</span>
-            </button>
+            </div>
           ))}
         </div>
         <div className="form-actions">
