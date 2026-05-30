@@ -12,7 +12,11 @@ import {
 } from '../utils/storage';
 import { generateClipsForDuration, generateId } from '../utils/helpers';
 import { emptyProgress, ensureProgress, recordClipCompletion } from '../utils/progress';
-import { DEFAULT_USER_LIFE_CONTEXT, normalizeUserLifeContext } from '../utils/lifeRecommendations';
+import {
+  DEFAULT_USER_LIFE_CONTEXT,
+  isLegacyLifeRecommendation,
+  normalizeUserLifeContext,
+} from '../utils/lifeRecommendations';
 import { getDescendantFolderIds } from '../utils/folders';
 import { clearAllVideoFiles } from '../utils/videoDb';
 import {
@@ -45,6 +49,16 @@ function defaultFeedSettings(): FeedSettings {
 function migrateAppData(data: AppData): AppData {
   let migrated: AppData = {
     ...data,
+    instances: Array.isArray(data.instances)
+      ? data.instances.map(instance => ({
+          ...instance,
+          clips: instance.clips.map(clip => (
+            clip.lifeRecommendations?.some(isLegacyLifeRecommendation)
+              ? { ...clip, lifeRecommendations: undefined, lifeContextSnapshot: undefined }
+              : clip
+          )),
+        }))
+      : [],
     folders: Array.isArray(data.folders) ? data.folders : [],
     remixes: Array.isArray(data.remixes) ? data.remixes : [],
     featureRequests: Array.isArray(data.featureRequests) ? data.featureRequests : [],

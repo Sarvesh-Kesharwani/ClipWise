@@ -20,6 +20,14 @@ export function normalizeUserLifeContext(context?: string): string {
   return trimmed;
 }
 
+export function isLegacyLifeRecommendation(recommendation: string): boolean {
+  return recommendation.includes(' + ')
+    || recommendation.startsWith('Use coding')
+    || recommendation.startsWith('Apply coding')
+    || recommendation.startsWith('Practice coding')
+    || recommendation.includes('one cleaner ClipWise/Tubeo feature flow');
+}
+
 interface LifeRecommendationInput {
   lifeContext: string;
   videoTitle?: string;
