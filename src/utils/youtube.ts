@@ -1,3 +1,5 @@
+import type { TranscriptSegment } from '../types';
+
 export function extractYouTubeId(url: string): string | null {
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?#]+)/,
@@ -82,6 +84,14 @@ export async function getYouTubeTitle(url: string): Promise<string> {
   } catch {
     return 'YouTube Video';
   }
+}
+
+export async function fetchYouTubeTranscript(videoId: string): Promise<TranscriptSegment[]> {
+  const response = await fetch(`/api/youtube-transcript?videoId=${encodeURIComponent(videoId)}`);
+  if (!response.ok) return [];
+
+  const data = await response.json() as { transcript?: TranscriptSegment[] };
+  return Array.isArray(data.transcript) ? data.transcript : [];
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

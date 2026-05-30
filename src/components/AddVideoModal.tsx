@@ -1,7 +1,15 @@
 import { useState, useRef } from 'react';
 import { useApp } from '../store/useApp';
 import { storeVideoFile, extractVideoMetadata } from '../utils/videoDb';
-import { extractYouTubeId, getYouTubeThumbnail, getYouTubeTitle, isPlaylistUrl, extractPlaylistId, fetchPlaylistVideoIds } from '../utils/youtube';
+import {
+  extractYouTubeId,
+  getYouTubeThumbnail,
+  getYouTubeTitle,
+  isPlaylistUrl,
+  extractPlaylistId,
+  fetchPlaylistVideoIds,
+  fetchYouTubeTranscript,
+} from '../utils/youtube';
 import { fetchYouLearnVideos, isYouLearnSpaceUrl } from '../utils/youlearn';
 import { generateId } from '../utils/helpers';
 import { getFolderDepth, getFolderOptions } from '../utils/folders';
@@ -77,6 +85,7 @@ export default function AddVideoModal({ onClose }: Props) {
     try {
       const title = await getYouTubeTitle(youtubeUrl);
       const thumbnail = getYouTubeThumbnail(videoId);
+      const transcript = await fetchYouTubeTranscript(videoId);
 
       addVideo({
         id: generateId(),
@@ -84,6 +93,7 @@ export default function AddVideoModal({ onClose }: Props) {
         source: 'youtube',
         youtubeId: videoId,
         youtubeUrl,
+        youlearnTranscript: transcript,
         duration: 0,
         thumbnail,
         createdAt: Date.now(),
@@ -124,6 +134,7 @@ export default function AddVideoModal({ onClose }: Props) {
         const videoUrl = `https://www.youtube.com/watch?v=${vid}`;
         const title = await getYouTubeTitle(videoUrl);
         const thumbnail = getYouTubeThumbnail(vid);
+        const transcript = await fetchYouTubeTranscript(vid);
 
         addVideo({
           id: generateId(),
@@ -131,6 +142,7 @@ export default function AddVideoModal({ onClose }: Props) {
           source: 'youtube',
           youtubeId: vid,
           youtubeUrl: videoUrl,
+          youlearnTranscript: transcript,
           duration: 0,
           thumbnail,
           createdAt: Date.now(),

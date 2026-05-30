@@ -20,126 +20,167 @@ export function normalizeUserLifeContext(context?: string): string {
   return trimmed;
 }
 
-const STOP_WORDS = new Set([
-  'about', 'after', 'again', 'also', 'because', 'before', 'being', 'between',
-  'could', 'every', 'first', 'from', 'have', 'into', 'just', 'like', 'more',
-  'most', 'only', 'other', 'that', 'their', 'there', 'these', 'thing', 'this',
-  'those', 'through', 'video', 'watch', 'what', 'when', 'where', 'which',
-  'while', 'with', 'would', 'your',
-]);
-
 interface LifeRecommendationInput {
   lifeContext: string;
   videoTitle?: string;
   clipText?: string;
 }
 
-function extractKeywords(text: string, limit = 4): string[] {
-  const counts = new Map<string, number>();
-  const words = text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, ' ')
-    .split(/\s+/)
-    .map(word => word.trim())
-    .filter(word => word.length > 3 && !STOP_WORDS.has(word));
-
-  for (const word of words) {
-    counts.set(word, (counts.get(word) ?? 0) + 1);
-  }
-
-  return Array.from(counts.entries())
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, limit)
-    .map(([word]) => word);
+function hasAny(text: string, terms: string[]): boolean {
+  return terms.some(term => text.includes(term));
 }
 
-function shortPoint(text: string): string {
-  const lower = text.toLowerCase();
-
-  if (lower.includes('model context protocol') || /\bmcp\b/.test(lower)) {
-    return 'MCP client-server-tool structure';
-  }
-  if (lower.includes('client') && lower.includes('server')) {
-    return 'client-server responsibilities';
-  }
-  if (lower.includes('rag') || lower.includes('retrieval')) {
-    return 'RAG retrieval flow';
-  }
-  if (lower.includes('agent') || lower.includes('tool')) {
-    return 'agent tool-use flow';
-  }
-  if (lower.includes('prompt')) {
-    return 'prompt design pattern';
-  }
-  if (lower.includes('database') || lower.includes('supabase') || lower.includes('sql')) {
-    return 'database design choice';
-  }
-  if (lower.includes('architecture') || lower.includes('system')) {
-    return 'system architecture idea';
-  }
-
-  const keywords = extractKeywords(text, 3);
-  if (keywords.length === 0) return 'this clip point';
-  return keywords.join(' + ');
-}
-
-function transcriptPoints(clipText?: string, videoTitle?: string): string[] {
-  const text = clipText?.trim();
-  if (!text) return [];
-
-  const sentences = text
+function cleanSnippet(text: string): string {
+  const sentence = text
     .replace(/\s+/g, ' ')
-    .replace(/[?!]/g, '.')
-    .split('.')
-    .map(sentence => sentence.trim())
-    .filter(sentence => sentence.length >= 24);
+    .split(/[.!?।]/)
+    .map(part => part.trim())
+    .find(part => part.length >= 32);
 
-  const source = sentences.length > 0 ? sentences : [text];
-  const titleWords = extractKeywords(videoTitle ?? '', 8);
-  const scored = source.map((sentence, index) => {
-    const lower = sentence.toLowerCase();
-    const keywordScore = extractKeywords(sentence, 8).length;
-    const titleScore = titleWords.filter(word => lower.includes(word)).length * 2;
-    const domainScore = [
-      'mcp', 'model context protocol', 'architecture', 'client', 'server',
-      'agent', 'tool', 'rag', 'retrieval', 'prompt', 'database', 'workflow',
-    ].filter(term => lower.includes(term)).length * 3;
-    return { sentence, score: keywordScore + titleScore + domainScore - index * 0.2 };
-  });
+  if (!sentence) return 'the main idea from this clip';
 
-  const points = scored
-    .sort((a, b) => b.score - a.score)
-    .map(item => shortPoint(item.sentence));
-
-  return Array.from(new Set(points)).slice(0, 3);
+  const words = sentence.split(/\s+/).slice(0, 14).join(' ');
+  return words.charAt(0).toLowerCase() + words.slice(1);
 }
 
-function padPoints(points: string[], videoTitle?: string): string[] {
-  const fallback = shortPoint(videoTitle ?? '');
-  const padded = [...points];
-  while (padded.length < 3) {
-    padded.push(fallback === 'this clip point' ? `clip point ${padded.length + 1}` : fallback);
-  }
-  return padded.slice(0, 3);
+function transcriptSummary(clipText?: string): string {
+  const text = clipText?.trim();
+  if (!text) return '';
+
+  return text
+    .replace(/\s+/g, ' ')
+    .slice(0, 5000)
+    .toLowerCase();
+}
+
+function noTranscriptRecommendations(): string[] {
+  return [
+    'Transcript is not loaded yet; open this clip again after a few seconds so ClipWise can fetch captions from YouTube.',
+    'After captions load, use the clip idea as a concrete Tubeo or ClipWise action instead of saving a generic note.',
+    'If captions are unavailable for this video, write one clear point in your summary and use that as the use-case anchor.',
+  ];
 }
 
 export function buildLifeRecommendations(input: LifeRecommendationInput): string[] {
   const context = normalizeUserLifeContext(input.lifeContext);
   const contextLower = context.toLowerCase();
-  const points = padPoints(transcriptPoints(input.clipText, input.videoTitle), input.videoTitle);
-  const appTarget = contextLower.includes('clipwise') || contextLower.includes('tubeo')
-    ? 'ClipWise/Tubeo'
-    : 'your app';
-  const workTarget = contextLower.includes('rag') || contextLower.includes('ai/ml') || contextLower.includes('gen ai')
-    ? 'AI/RAG work'
-    : 'technical work';
-  const communicationTarget = contextLower.includes('interview') || contextLower.includes('remote')
-    ? 'interviews or standups'
-    : 'a work update';
+  const titleLower = input.videoTitle?.toLowerCase() ?? '';
+  const transcriptLower = transcriptSummary(input.clipText);
+  const combined = `${titleLower} ${transcriptLower}`;
+  const hasTranscript = transcriptLower.length > 0;
+
+  if (!hasTranscript) return noTranscriptRecommendations();
+
+  if (hasAny(combined, ['subagent', 'sub-agent', 'sub agent', 'subagents', 'ai workers', 'parallel', 'पैरेलल', 'पैरलल', 'सब एजेंट', 'सब-एजेंट'])) {
+    return [
+      'When working on Tubeo, split one feature into UI, sync, and testing subagents so development runs in parallel.',
+      'For ClipWise bugs, run one Codex/Claude subagent to inspect player logic and another to verify Supabase sync.',
+      'Use subagents when a feature feels large: give each agent one repo-scoped task, then review and merge their diffs.',
+    ];
+  }
+
+  if (hasAny(combined, ['agentic coding', 'vibe coding', 'क्लॉट कोड', 'claude code', 'coding agent'])) {
+    return [
+      'When building ClipWise or Tubeo, write a clear feature spec first, then let Codex implement while you review diffs and tests.',
+      'Use this to avoid random vibe coding: keep one checklist for requirements, files changed, build result, and deploy status.',
+      'Apply it at work by treating AI as a junior developer: assign small tasks, inspect output, and keep final ownership yourself.',
+    ];
+  }
+
+  if (hasAny(combined, ['slash command', 'slash commands', 'custom command'])) {
+    return [
+      'Create slash commands for repeated Tubeo tasks like "fix sync bug", "run build", and "deploy prod".',
+      'Use a command for ClipWise video-flow QA so the same checks run every time before pushing.',
+      'Turn your common prompts into commands to save time when switching between personal projects.',
+    ];
+  }
+
+  if (hasAny(combined, ['context window', 'token', 'compact', 'memory'])) {
+    return [
+      'Use context-window discipline in Tubeo by keeping each Codex task focused on one screen or data flow.',
+      'Before long ClipWise fixes, summarize current findings so the next agent run does not lose important decisions.',
+      'Apply this at work by sending AI only the logs, files, and goal needed for the current debugging step.',
+    ];
+  }
+
+  if (hasAny(combined, ['claude.md', 'instructions', 'rules file'])) {
+    return [
+      'Create a project instruction file for Tubeo so every agent follows your sync, UI, and deploy rules.',
+      'Use it in ClipWise to prevent agents from touching shared Supabase schemas or unrelated data.',
+      'Keep your preferred testing and commit rules in one place so future AI sessions start with the right context.',
+    ];
+  }
+
+  if (hasAny(combined, ['spec-driven', 'spec driven', 'specification', 'requirements'])) {
+    return [
+      'Before adding a Tubeo feature, write the expected user flow, saved state, and success checks as a short spec.',
+      'Use specs in ClipWise when changing player behavior so recommendations, summaries, and Supabase sync stay aligned.',
+      'Apply this to work tasks by asking for acceptance criteria before coding the solution.',
+    ];
+  }
+
+  if (hasAny(combined, ['plan mode', 'ultraplan', 'planning mode'])) {
+    return [
+      'Use plan mode before risky Tubeo or ClipWise changes to identify files, data impact, and tests first.',
+      'When a bug is unclear, ask Codex for a plan that separates investigation, fix, and verification.',
+      'Apply it in work projects before touching shared DBs, auth, or production deployment settings.',
+    ];
+  }
+
+  if (hasAny(combined, ['image as context', 'screenshot', 'image context'])) {
+    return [
+      'For ClipWise UI bugs, attach the screenshot so Codex can match the exact broken state instead of guessing.',
+      'Use screenshots from Tubeo dashboards to ask for precise spacing, visibility, or component fixes.',
+      'At work, share screenshots with logs so AI can connect the visible issue to the likely code path.',
+    ];
+  }
+
+  if (hasAny(combined, ['model context protocol', 'mcp'])) {
+    return [
+      'Use MCP to connect Codex with Notion, Supabase, or GitHub when Tubeo needs real project context.',
+      'For ClipWise, treat MCP tools as controlled bridges to data instead of pasting private context manually.',
+      'Apply MCP at work when an AI assistant needs live docs, tickets, or DB context to answer accurately.',
+    ];
+  }
+
+  if (hasAny(combined, ['hook', 'hooks'])) {
+    return [
+      'Use hooks to run automatic checks after Codex edits Tubeo or ClipWise files.',
+      'Create a hook for build/lint reminders so broken changes are caught before production deploy.',
+      'Apply hooks at work for repeated safety steps like formatting, tests, or logging checks.',
+    ];
+  }
+
+  if (hasAny(combined, ['plugin', 'plugins'])) {
+    return [
+      'Use plugins to package repeated ClipWise workflows like Supabase checks, Vercel deploy, and UI QA.',
+      'For Tubeo, create focused plugin-style routines for news, YouLearn, and sync maintenance.',
+      'Apply this at work by turning repeated AI instructions into reusable capability bundles.',
+    ];
+  }
+
+  if (hasAny(combined, ['rag', 'retrieval', 'embedding', 'vector'])) {
+    return [
+      'Use this RAG idea to make Tubeo retrieve the right saved notes or transcripts before generating answers.',
+      'For ClipWise, connect clip recommendations to transcript chunks instead of relying on your handwritten summary.',
+      'Apply it in Gen AI work by checking retrieval quality before blaming the model output.',
+    ];
+  }
+
+  if (hasAny(combined, ['database', 'supabase', 'sql', 'schema'])) {
+    return [
+      'Use this database idea in ClipWise by keeping new app data in isolated tables and never touching shared schemas.',
+      'For Tubeo, define the saved-state shape before changing UI so sync and restore keep working.',
+      'Apply it at work by separating migration, data safety, and app-code changes before deployment.',
+    ];
+  }
+
+  const snippet = cleanSnippet(input.clipText ?? '');
+  const appName = contextLower.includes('tubeo') ? 'Tubeo' : 'ClipWise';
 
   return [
-    `Use ${points[0]} to plan one cleaner ${appTarget} feature flow.`,
-    `Turn ${points[1]} into a short checklist for ${workTarget}.`,
-    `Explain ${points[2]} as one project example in ${communicationTarget}.`,
+    `Use this idea in ${appName}: ${snippet}, then convert it into one small feature or workflow improvement.`,
+    'Turn the clip into one practical checklist you can reuse while coding, debugging, or studying.',
+    'Practice explaining this point as a real project example for an interview, standup, or teammate update.',
   ];
 }

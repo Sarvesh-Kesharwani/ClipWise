@@ -12,6 +12,7 @@ import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
 import { formatTime } from '../utils/helpers';
 import { fetchYouLearnTranscript } from '../utils/youlearn';
+import { fetchYouTubeTranscript } from '../utils/youtube';
 
 const CELEBRATION_DURATION_MS = 1600;
 const SUMMARY_PROMPT_DELAY_MS = 900;
@@ -152,6 +153,20 @@ export default function PlayerPage() {
     let cancelled = false;
 
     fetchYouLearnTranscript(video.youlearnContentId).then(transcript => {
+      if (cancelled || transcript.length === 0) return;
+      updateVideo({ ...video, youlearnTranscript: transcript });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [video, updateVideo]);
+
+  useEffect(() => {
+    if (!video || video.source !== 'youtube' || !video.youtubeId || video.youlearnTranscript?.length) return;
+    let cancelled = false;
+
+    fetchYouTubeTranscript(video.youtubeId).then(transcript => {
       if (cancelled || transcript.length === 0) return;
       updateVideo({ ...video, youlearnTranscript: transcript });
     });

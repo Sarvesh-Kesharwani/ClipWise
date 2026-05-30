@@ -10,6 +10,7 @@ import type { Clip, Instance, PlayerRef, RemixClipRef, Video } from '../types';
 import { formatTime } from '../utils/helpers';
 import { getVideoFile } from '../utils/videoDb';
 import { WatchTracker } from '../utils/watchTracker';
+import { fetchYouTubeTranscript } from '../utils/youtube';
 
 const CELEBRATION_DURATION_MS = 1600;
 const SUMMARY_PROMPT_DELAY_MS = 900;
@@ -29,6 +30,7 @@ export default function RemixPlayerPage() {
     getVideo,
     getInstance,
     updateClip,
+    updateVideo,
     recordClipWatched,
     recordClipSummarized,
     userLifeContext,
@@ -187,6 +189,20 @@ export default function RemixPlayerPage() {
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [currentRefId, currentItem]);
+
+  useEffect(() => {
+    if (!currentItem?.video.youtubeId || currentItem.video.source !== 'youtube' || currentItem.video.youlearnTranscript?.length) return;
+    let cancelled = false;
+
+    fetchYouTubeTranscript(currentItem.video.youtubeId).then(transcript => {
+      if (cancelled || transcript.length === 0) return;
+      updateVideo({ ...currentItem.video, youlearnTranscript: transcript });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentItem, updateVideo]);
 
   function completeCurrentClip(item: RemixItem, index: number) {
     if (countedRef.current.has(item.ref.id)) return;
