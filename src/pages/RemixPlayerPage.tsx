@@ -24,7 +24,15 @@ interface RemixItem {
 export default function RemixPlayerPage() {
   const { remixId } = useParams<{ remixId: string }>();
   const navigate = useNavigate();
-  const { getRemix, getVideo, getInstance, updateClip, recordClipWatched, recordClipSummarized } = useApp();
+  const {
+    getRemix,
+    getVideo,
+    getInstance,
+    updateClip,
+    recordClipWatched,
+    recordClipSummarized,
+    userLifeContext,
+  } = useApp();
   const remix = remixId ? getRemix(remixId) : undefined;
 
   const playerRef = useRef<PlayerRef>(null);
@@ -231,11 +239,15 @@ export default function RemixPlayerPage() {
     }
   }
 
-  function handleSaveSummary(text: string) {
+  function handleSaveSummary(text: string, lifeRecommendations: string[], lifeContextSnapshot: string) {
     const summaryItem = items[summaryClipIndex];
     if (!summaryItem) return;
     const wasUnsummarized = !summaryItem.clip.summary.trim();
-    updateClip(summaryItem.instance.id, summaryItem.clip.index, { summary: text });
+    updateClip(summaryItem.instance.id, summaryItem.clip.index, {
+      summary: text,
+      lifeRecommendations,
+      lifeContextSnapshot,
+    });
     if (wasUnsummarized) {
       recordClipSummarized(summaryItem.video.id);
     }
@@ -274,6 +286,15 @@ export default function RemixPlayerPage() {
   const summaryRequiredClip = remixClips[currentIndex];
   const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
   const currentClip = remixClips[currentIndex];
+  const summaryItem = items[summaryClipIndex];
+  const summaryClipText = summaryItem?.video.youlearnTranscript?.length
+    ? summaryItem.video.youlearnTranscript
+      .filter(segment =>
+        segment.startTime >= summaryItem.clip.startTime && segment.startTime < summaryItem.clip.endTime
+      )
+      .map(segment => segment.text)
+      .join(' ')
+    : '';
   const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipProgress)) * 100);
 
   return (
@@ -371,6 +392,13 @@ export default function RemixPlayerPage() {
         {currentItem.clip.summary && (
           <div className="current-clip-summary">
             <strong>Clip {currentIndex + 1} summary:</strong> {currentItem.clip.summary}
+            {currentItem.clip.lifeRecommendations?.length ? (
+              <div className="current-life-recommendations">
+                {currentItem.clip.lifeRecommendations.map((recommendation, index) => (
+                  <p key={recommendation}><strong>{index + 1}.</strong> {recommendation}</p>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
       </main>
@@ -378,6 +406,9 @@ export default function RemixPlayerPage() {
       {showSummary && remixClips[summaryClipIndex] && (
         <SummaryModal
           clip={remixClips[summaryClipIndex]}
+          videoTitle={summaryItem?.video.title}
+          clipText={summaryClipText}
+          lifeContext={userLifeContext}
           onSave={handleSaveSummary}
           onClose={() => setShowSummary(false)}
         />

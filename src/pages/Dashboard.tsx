@@ -38,6 +38,8 @@ export default function Dashboard() {
     instances,
     cloudSync,
     signOut,
+    userLifeContext,
+    updateUserLifeContext,
     getInstancesForVideo,
     getInstance,
     getVideo,
@@ -60,6 +62,8 @@ export default function Dashboard() {
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [activeFolderSettingsId, setActiveFolderSettingsId] = useState<string | null>(null);
   const [folderDraftName, setFolderDraftName] = useState('');
+  const [showLifeContextSettings, setShowLifeContextSettings] = useState(false);
+  const [lifeContextDraft, setLifeContextDraft] = useState(userLifeContext);
 
   // ===== Today's progress snapshot =====
   const todaySnapshot = getTodaySnapshot(progress);
@@ -245,6 +249,17 @@ export default function Dashboard() {
     setActiveFolderSettingsId(null);
   }
 
+  function openLifeContextSettings() {
+    setLifeContextDraft(userLifeContext);
+    setShowLifeContextSettings(true);
+    setShowAccountMenu(false);
+  }
+
+  function saveLifeContext() {
+    updateUserLifeContext(lifeContextDraft);
+    setShowLifeContextSettings(false);
+  }
+
   const topLevelFolders = folders.filter(f => !f.parentId);
   const activeFolder = activeFolderSettingsId
     ? folders.find(folder => folder.id === activeFolderSettingsId)
@@ -428,6 +443,34 @@ export default function Dashboard() {
               onClick={() => { setShowRequests(true); setShowAccountMenu(false); }}
             >
               View requests
+            </button>
+            <button className="cw-btn cw-btn-secondary" onClick={openLifeContextSettings}>
+              Life context
+            </button>
+          </div>
+        </div>
+      )}
+      {showLifeContextSettings && (
+        <div className="cw-floating-menu cw-life-context-menu">
+          <strong className="cw-floating-menu-title">Life context</strong>
+          <label className="cw-folder-settings-field">
+            <span>Used for recommendations</span>
+            <textarea
+              value={lifeContextDraft}
+              onChange={event => setLifeContextDraft(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Escape') setShowLifeContextSettings(false);
+              }}
+              autoFocus
+              rows={7}
+            />
+          </label>
+          <div className="cw-folder-settings-actions">
+            <button className="cw-btn cw-btn-primary" onClick={saveLifeContext} disabled={!lifeContextDraft.trim()}>
+              Save
+            </button>
+            <button className="cw-btn cw-btn-secondary" onClick={() => setShowLifeContextSettings(false)}>
+              Cancel
             </button>
           </div>
         </div>

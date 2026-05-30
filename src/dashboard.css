@@ -1042,13 +1042,18 @@ body:has(.cw-dashboard) { background: #0e0f0c; }
 .drive-backup-result.ok  { color: #58CC02; }
 .drive-backup-result.err { color: #FF4B4B; }
 
-.cw-folder-settings-menu {
+.cw-folder-settings-menu,
+.cw-life-context-menu {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(360px, calc(100vw - 32px));
   z-index: 120;
+}
+
+.cw-life-context-menu {
+  width: min(520px, calc(100vw - 32px));
 }
 
 .cw-folder-settings-field {
@@ -1061,7 +1066,8 @@ body:has(.cw-dashboard) { background: #0e0f0c; }
   text-transform: uppercase;
 }
 
-.cw-folder-settings-field input {
+.cw-folder-settings-field input,
+.cw-folder-settings-field textarea {
   min-height: 42px;
   border: 1px solid var(--cw-line);
   border-radius: 8px;
@@ -1070,6 +1076,13 @@ body:has(.cw-dashboard) { background: #0e0f0c; }
   color: var(--cw-ink);
   font-size: 15px;
   text-transform: none;
+}
+
+.cw-folder-settings-field textarea {
+  min-height: 150px;
+  padding: 12px;
+  resize: vertical;
+  line-height: 1.45;
 }
 
 .cw-folder-settings-actions {

@@ -210,6 +210,42 @@ input, textarea {
   box-shadow: 0 0 0 3px rgba(88, 204, 2, 0.15);
 }
 
+.life-recommendations {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.life-recommendations-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.life-recommendation {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--surface-2);
+  color: var(--text);
+  text-align: left;
+  line-height: 1.35;
+}
+
+.life-recommendation:hover {
+  border-color: var(--green);
+}
+
+.life-recommendation strong {
+  color: var(--green-dark);
+}
+
 /* ===== Modals ===== */
 .modal-overlay {
   position: fixed;
@@ -2509,6 +2545,20 @@ input, textarea {
   color: var(--green-dark);
 }
 
+.current-life-recommendations {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.current-life-recommendations p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
 .current-clip-transcript {
   max-height: 190px;
   overflow: auto;
@@ -3613,7 +3663,7 @@ input, textarea {
 
 /* ===== Summary Modal ===== */
 .summary-modal {
-  max-width: 480px;
+  max-width: 560px;
 }
 
 /* ===== Scrollbar ===== */

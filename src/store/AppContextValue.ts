@@ -25,6 +25,7 @@ export interface AppContextType {
   feedLists: FeedList[];
   feedSettings: FeedSettings;
   progress: ProgressState;
+  userLifeContext: string;
   cloudSync: CloudSyncState;
   addVideo: (video: Video) => void;
   deleteVideo: (videoId: string) => void;
@@ -52,6 +53,7 @@ export interface AppContextType {
   deleteFeedList: (listId: string) => void;
   setFeedListVideos: (listId: string, videoIds: string[]) => void;
   updateFeedSettings: (settings: Partial<FeedSettings>) => void;
+  updateUserLifeContext: (context: string) => void;
   recordClipWatched: (videoId: string) => void;
   recordClipSummarized: (videoId: string) => void;
   useStreakFreeze: () => void;

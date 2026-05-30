@@ -19,7 +19,16 @@ const SUMMARY_PROMPT_DELAY_MS = 900;
 export default function PlayerPage() {
   const { instanceId } = useParams<{ instanceId: string }>();
   const navigate = useNavigate();
-  const { getInstance, getVideo, updateClip, generateClips, updateVideo, recordClipWatched, recordClipSummarized } = useApp();
+  const {
+    getInstance,
+    getVideo,
+    updateClip,
+    generateClips,
+    updateVideo,
+    recordClipWatched,
+    recordClipSummarized,
+    userLifeContext,
+  } = useApp();
 
   const instance = getInstance(instanceId!);
   const video = instance ? getVideo(instance.videoId) : null;
@@ -273,11 +282,15 @@ export default function PlayerPage() {
     seekToTime(time);
   }
 
-  function handleSaveSummary(text: string) {
+  function handleSaveSummary(text: string, lifeRecommendations: string[], lifeContextSnapshot: string) {
     if (summaryClipIndex >= 0 && instance) {
       const previous = clips[summaryClipIndex];
       const wasUnsummarized = !previous?.summary?.trim();
-      updateClip(instance.id, summaryClipIndex, { summary: text });
+      updateClip(instance.id, summaryClipIndex, {
+        summary: text,
+        lifeRecommendations,
+        lifeContextSnapshot,
+      });
       if (wasUnsummarized) {
         recordClipSummarized(instance.videoId);
       }
@@ -308,11 +321,20 @@ export default function PlayerPage() {
   const summaryRequiredClip = clips[activeClipIndex];
   const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
   const currentClip = clips[activeClipIndex];
+  const summaryClip = clips[summaryClipIndex];
   const currentTranscript = video?.youlearnTranscript?.length && currentClip
     ? video.youlearnTranscript.filter(segment =>
       segment.startTime >= currentClip.startTime && segment.startTime < currentClip.endTime
     )
     : [];
+  const summaryClipText = video?.youlearnTranscript?.length && summaryClip
+    ? video.youlearnTranscript
+      .filter(segment =>
+        segment.startTime >= summaryClip.startTime && segment.startTime < summaryClip.endTime
+      )
+      .map(segment => segment.text)
+      .join(' ')
+    : '';
   const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipWatchProgress)) * 100);
 
   return (
@@ -417,6 +439,13 @@ export default function PlayerPage() {
         {clips[activeClipIndex] && clips[activeClipIndex].summary && (
           <div className="current-clip-summary">
             <strong>Clip {activeClipIndex + 1} summary:</strong> {clips[activeClipIndex].summary}
+            {clips[activeClipIndex].lifeRecommendations?.length ? (
+              <div className="current-life-recommendations">
+                {clips[activeClipIndex].lifeRecommendations?.map((recommendation, index) => (
+                  <p key={recommendation}><strong>{index + 1}.</strong> {recommendation}</p>
+                ))}
+              </div>
+            ) : null}
           </div>
         )}
 
@@ -431,6 +460,9 @@ export default function PlayerPage() {
       {showSummary && clips[summaryClipIndex] && (
         <SummaryModal
           clip={clips[summaryClipIndex]}
+          videoTitle={video.title}
+          clipText={summaryClipText}
+          lifeContext={userLifeContext}
           onSave={handleSaveSummary}
           onClose={() => setShowSummary(false)}
         />

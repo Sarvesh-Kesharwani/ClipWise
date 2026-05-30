@@ -1,20 +1,39 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Clip } from '../types';
 import { formatTime } from '../utils/helpers';
+import { buildLifeRecommendations, DEFAULT_USER_LIFE_CONTEXT } from '../utils/lifeRecommendations';
 
 interface Props {
   clip: Clip;
-  onSave: (summary: string) => void;
+  videoTitle?: string;
+  clipText?: string;
+  lifeContext?: string;
+  onSave: (summary: string, lifeRecommendations: string[], lifeContextSnapshot: string) => void;
   onClose: () => void;
 }
 
-export default function SummaryModal({ clip, onSave, onClose }: Props) {
+export default function SummaryModal({
+  clip,
+  videoTitle,
+  clipText,
+  lifeContext = DEFAULT_USER_LIFE_CONTEXT,
+  onSave,
+  onClose,
+}: Props) {
   const [text, setText] = useState(clip.summary);
   const trimmedText = text.trim();
+  const recommendations = useMemo(() => {
+    return buildLifeRecommendations({
+      lifeContext,
+      videoTitle,
+      clipText,
+      summary: trimmedText,
+    });
+  }, [clipText, lifeContext, trimmedText, videoTitle]);
 
   function handleSave() {
     if (!trimmedText) return;
-    onSave(trimmedText);
+    onSave(trimmedText, recommendations, lifeContext);
   }
 
   return (
@@ -37,6 +56,24 @@ export default function SummaryModal({ clip, onSave, onClose }: Props) {
           autoFocus
           rows={3}
         />
+        <div className="life-recommendations">
+          <span className="life-recommendations-label">Personal use</span>
+          {recommendations.map((recommendation, index) => (
+            <button
+              key={recommendation}
+              type="button"
+              className="life-recommendation"
+              onClick={() => setText(current => {
+                const base = current.trim();
+                const nextLine = `${index + 1}. ${recommendation}`;
+                return base ? `${base}\n\n${nextLine}` : nextLine;
+              })}
+            >
+              <strong>{index + 1}</strong>
+              <span>{recommendation}</span>
+            </button>
+          ))}
+        </div>
         <div className="form-actions">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button className="btn-primary" onClick={handleSave} disabled={!trimmedText}>

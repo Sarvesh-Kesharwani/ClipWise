@@ -1,6 +1,7 @@
 import type { AppData } from '../types';
 import type { CloudUserProfile } from './supabaseSync';
 import { emptyProgress } from './progress';
+import { DEFAULT_USER_LIFE_CONTEXT } from './lifeRecommendations';
 
 const STORAGE_KEY = 'clipwise-data';
 const STORAGE_UPDATED_AT_KEY = 'clipwise-data-updated-at';
@@ -36,6 +37,7 @@ function emptyAppData(): AppData {
       includeSubfolders: true,
     },
     progress: emptyProgress(),
+    userLifeContext: DEFAULT_USER_LIFE_CONTEXT,
   };
 }
 

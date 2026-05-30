@@ -12,6 +12,7 @@ import {
 } from '../utils/storage';
 import { generateClipsForDuration, generateId } from '../utils/helpers';
 import { emptyProgress, ensureProgress, recordClipCompletion } from '../utils/progress';
+import { DEFAULT_USER_LIFE_CONTEXT } from '../utils/lifeRecommendations';
 import { getDescendantFolderIds } from '../utils/folders';
 import { clearAllVideoFiles } from '../utils/videoDb';
 import {
@@ -50,6 +51,9 @@ function migrateAppData(data: AppData): AppData {
     feedLists: Array.isArray(data.feedLists) ? data.feedLists : [],
     feedSettings: { ...defaultFeedSettings(), ...(data.feedSettings ?? {}) },
     progress: ensureProgress(data.progress),
+    userLifeContext: typeof data.userLifeContext === 'string' && data.userLifeContext.trim()
+      ? data.userLifeContext
+      : DEFAULT_USER_LIFE_CONTEXT,
   };
 
   // Ensure the app always has at least one folder to render into.
@@ -402,6 +406,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   }, [setDataWithLocalChange]);
 
+  const updateUserLifeContext = useCallback((context: string) => {
+    setDataWithLocalChange(prev => ({
+      ...prev,
+      userLifeContext: context.trim() || DEFAULT_USER_LIFE_CONTEXT,
+    }));
+  }, [setDataWithLocalChange]);
+
   const setFeedListVideos = useCallback((listId: string, videoIds: string[]) => {
     const uniqueVideoIds = Array.from(new Set(videoIds));
     setDataWithLocalChange(prev => ({
@@ -423,6 +434,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       feedLists: [],
       feedSettings: defaultFeedSettings(),
       progress: emptyProgress(),
+      userLifeContext: DEFAULT_USER_LIFE_CONTEXT,
     };
     clearAppData();
     void clearAllVideoFiles();
@@ -445,6 +457,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       feedLists: [],
       feedSettings: defaultFeedSettings(),
       progress: emptyProgress(),
+      userLifeContext: DEFAULT_USER_LIFE_CONTEXT,
     };
     setData(emptyData);
     setDataUpdatedAt(Date.now());
@@ -619,6 +632,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       feedLists: data.feedLists,
       feedSettings: data.feedSettings ?? defaultFeedSettings(),
       progress: data.progress,
+      userLifeContext: data.userLifeContext ?? DEFAULT_USER_LIFE_CONTEXT,
       cloudSync,
       addVideo, deleteVideo, updateVideo,
       addInstance, deleteInstance, updateClip,
@@ -629,6 +643,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addFeatureRequest, toggleFeatureRequestComplete, deleteFeatureRequest,
       addFeedList, renameFeedList, deleteFeedList, setFeedListVideos,
       updateFeedSettings,
+      updateUserLifeContext,
       recordClipWatched, recordClipSummarized, useStreakFreeze,
       resetProgress,
       signOut,

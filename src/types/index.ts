@@ -65,6 +65,8 @@ export interface Clip {
   duration: number;
   watchCount: number;
   summary: string;
+  lifeRecommendations?: string[];
+  lifeContextSnapshot?: string;
 }
 
 export interface RemixClipRef {
@@ -119,6 +121,7 @@ export interface AppData {
   feedLists: FeedList[];
   progress: ProgressState;
   feedSettings?: FeedSettings;
+  userLifeContext?: string;
 }
 
 export interface PlayerRef {
