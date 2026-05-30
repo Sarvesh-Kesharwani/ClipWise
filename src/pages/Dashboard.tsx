@@ -22,7 +22,7 @@ import KeyboardHints from '../components/dashboard/KeyboardHints';
 
 import { generateId } from '../utils/helpers';
 import { getTodaySnapshot, todayKey } from '../utils/progress';
-import type { Video } from '../types';
+import type { Folder, Video } from '../types';
 
 const FREEZE_BONUS_MAX = 50;
 
@@ -42,6 +42,8 @@ export default function Dashboard() {
     getInstance,
     getVideo,
     addFolder,
+    renameFolder,
+    deleteFolder,
     deleteRemix,
     resetProgress,
     featureRequests,
@@ -56,6 +58,8 @@ export default function Dashboard() {
   const [showFreezesMenu, setShowFreezesMenu] = useState(false);
   const [filter, setFilter] = useState<DashFilter>('all');
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+  const [activeFolderSettingsId, setActiveFolderSettingsId] = useState<string | null>(null);
+  const [folderDraftName, setFolderDraftName] = useState('');
 
   // ===== Today's progress snapshot =====
   const todaySnapshot = getTodaySnapshot(progress);
@@ -215,10 +219,36 @@ export default function Dashboard() {
   }
 
   function toggleCollapse(id: string) {
-    setCollapsedFolders(prev => ({ ...prev, [id]: !prev[id] }));
+    setCollapsedFolders(prev => ({ ...prev, [id]: !(prev[id] ?? false) }));
+  }
+
+  function toggleSpaceCollapse(id: string) {
+    setCollapsedFolders(prev => ({ ...prev, [id]: !(prev[id] ?? true) }));
+  }
+
+  function openFolderSettings(folder: Folder) {
+    setActiveFolderSettingsId(folder.id);
+    setFolderDraftName(folder.name);
+  }
+
+  function saveFolderName() {
+    if (!activeFolderSettingsId) return;
+    const nextName = folderDraftName.trim();
+    if (!nextName) return;
+    renameFolder(activeFolderSettingsId, nextName);
+    setActiveFolderSettingsId(null);
+  }
+
+  function removeActiveFolder() {
+    if (!activeFolderSettingsId) return;
+    deleteFolder(activeFolderSettingsId);
+    setActiveFolderSettingsId(null);
   }
 
   const topLevelFolders = folders.filter(f => !f.parentId);
+  const activeFolder = activeFolderSettingsId
+    ? folders.find(folder => folder.id === activeFolderSettingsId)
+    : null;
 
   const requestsOpen = featureRequests.filter(r => !r.completed).length;
   const isEmpty = folders.length === 0 && videos.length === 0 && remixes.length === 0;
@@ -330,7 +360,7 @@ export default function Dashboard() {
           {topLevelFolders.map(folder => {
             const inFolder = filterFn(videos.filter(v => v.folderId === folder.id), filter);
             const subs = folders.filter(f => f.parentId === folder.id);
-            const collapsed = !!collapsedFolders[folder.id];
+            const collapsed = collapsedFolders[folder.id] ?? true;
             return (
               <section key={folder.id} className="cw-folder-section">
                 <FolderHeader
@@ -339,8 +369,9 @@ export default function Dashboard() {
                   subfolderCount={subs.length}
                   watchedPct={watchedPctFor(inFolder)}
                   collapsed={collapsed}
-                  onToggle={() => toggleCollapse(folder.id)}
+                  onToggle={() => toggleSpaceCollapse(folder.id)}
                   onAdd={() => setShowAddModal(true)}
+                  onSettings={() => openFolderSettings(folder)}
                 />
                 {!collapsed && (
                   <div className="cw-grid">
@@ -397,6 +428,34 @@ export default function Dashboard() {
               onClick={() => { setShowRequests(true); setShowAccountMenu(false); }}
             >
               View requests
+            </button>
+          </div>
+        </div>
+      )}
+      {activeFolder && (
+        <div className="cw-floating-menu cw-folder-settings-menu">
+          <strong className="cw-floating-menu-title">Space settings</strong>
+          <label className="cw-folder-settings-field">
+            <span>Name</span>
+            <input
+              value={folderDraftName}
+              onChange={event => setFolderDraftName(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') saveFolderName();
+                if (event.key === 'Escape') setActiveFolderSettingsId(null);
+              }}
+              autoFocus
+            />
+          </label>
+          <div className="cw-folder-settings-actions">
+            <button className="cw-btn cw-btn-primary" onClick={saveFolderName} disabled={!folderDraftName.trim()}>
+              Save
+            </button>
+            <button className="cw-btn cw-btn-secondary" onClick={() => setActiveFolderSettingsId(null)}>
+              Cancel
+            </button>
+            <button className="cw-btn cw-btn-secondary cw-menu-danger" onClick={removeActiveFolder}>
+              Delete
             </button>
           </div>
         </div>

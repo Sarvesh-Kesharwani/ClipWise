@@ -44,9 +44,11 @@ export default function FolderHeader({
         <button className="cw-folder-act" onClick={onAdd} aria-label="Add to folder">
           <IconPlus size={14} />
         </button>
-        <button className="cw-folder-act" onClick={onSettings} aria-label="Folder settings">
-          <IconSettings size={14} />
-        </button>
+        {onSettings && (
+          <button className="cw-folder-act" onClick={onSettings} aria-label="Folder settings">
+            <IconSettings size={14} />
+          </button>
+        )}
       </div>
     </div>
   );

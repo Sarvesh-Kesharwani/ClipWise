@@ -847,12 +847,14 @@ body:has(.cw-dashboard) { background: #0e0f0c; }
 .cw-clip-progress-strip {
   position: absolute;
   left: 0; right: 0; bottom: 0;
-  height: 3px;
-  background: rgba(255,255,255,.08);
+  height: 8px;
+  background: rgba(255,255,255,.18);
+  box-shadow: 0 -1px 0 rgba(0,0,0,.25) inset;
 }
 .cw-clip-progress-strip-fill {
   height: 100%;
   background: var(--cw-lime);
+  box-shadow: 0 0 10px rgba(88,204,2,.35);
 }
 .cw-clip-body {
   padding: 12px 14px 14px;
@@ -1039,3 +1041,40 @@ body:has(.cw-dashboard) { background: #0e0f0c; }
 .drive-backup-result { margin-top: 8px; font-size: 12.5px; }
 .drive-backup-result.ok  { color: #58CC02; }
 .drive-backup-result.err { color: #FF4B4B; }
+
+.cw-folder-settings-menu {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100vw - 32px));
+  z-index: 120;
+}
+
+.cw-folder-settings-field {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  color: var(--cw-ink-dim);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.cw-folder-settings-field input {
+  min-height: 42px;
+  border: 1px solid var(--cw-line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: var(--cw-panel-2);
+  color: var(--cw-ink);
+  font-size: 15px;
+  text-transform: none;
+}
+
+.cw-folder-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
