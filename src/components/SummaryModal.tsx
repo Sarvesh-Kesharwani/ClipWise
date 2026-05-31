@@ -31,8 +31,9 @@ export default function SummaryModal({
       lifeContext,
       videoTitle,
       clipText,
+      summaryText: trimmedText,
     });
-  }, [clipText, lifeContext, videoTitle]);
+  }, [clipText, lifeContext, trimmedText, videoTitle]);
 
   function handleSave() {
     if (!trimmedText) return;
@@ -59,21 +60,23 @@ export default function SummaryModal({
           autoFocus
           rows={3}
         />
-        <div className="life-recommendations">
-          <span className="life-recommendations-label">Personal use from Notion context</span>
-          <a className="life-recommendations-source" href={CONTEXT_ABOUT_ME_NOTION_URL} target="_blank" rel="noreferrer">
-            context-about-me
-          </a>
-          {recommendations.map((recommendation, index) => (
-            <div
-              key={recommendation}
-              className="life-recommendation"
-            >
-              <strong>{index + 1}</strong>
-              <span>{recommendation}</span>
-            </div>
-          ))}
-        </div>
+        {recommendations.length > 0 && (
+          <div className="life-recommendations">
+            <span className="life-recommendations-label">Personal use from Notion context</span>
+            <a className="life-recommendations-source" href={CONTEXT_ABOUT_ME_NOTION_URL} target="_blank" rel="noreferrer">
+              context-about-me
+            </a>
+            {recommendations.map((recommendation, index) => (
+              <div
+                key={recommendation}
+                className="life-recommendation"
+              >
+                <strong>{index + 1}</strong>
+                <span>{recommendation}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="form-actions">
           <button className="btn-secondary" onClick={onClose}>Cancel</button>
           <button className="btn-primary" onClick={handleSave} disabled={!trimmedText}>

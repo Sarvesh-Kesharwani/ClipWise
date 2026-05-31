@@ -5,7 +5,7 @@ const LEGACY_USER_LIFE_CONTEXT = [
 ].join(' ');
 
 export const CONTEXT_ABOUT_ME_NOTION_URL = 'https://www.notion.so/3700e89f89e780929e14da3cb2e44779';
-export const LIFE_RECOMMENDATIONS_VERSION = 2;
+export const LIFE_RECOMMENDATIONS_VERSION = 3;
 
 export const DEFAULT_USER_LIFE_CONTEXT = [
   'Source: Notion context-about-me profile.',
@@ -19,6 +19,7 @@ interface LifeRecommendationInput {
   lifeContext: string;
   videoTitle?: string;
   clipText?: string;
+  summaryText?: string;
 }
 
 interface TopicRule {
@@ -37,6 +38,9 @@ export function isLegacyLifeRecommendation(recommendation: string): boolean {
     || recommendation.startsWith('Use coding')
     || recommendation.startsWith('Apply coding')
     || recommendation.startsWith('Practice coding')
+    || recommendation.startsWith('No transcript is available')
+    || recommendation.startsWith('Wait a few seconds')
+    || recommendation.startsWith('If captions are unavailable')
     || recommendation.includes('one cleaner ClipWise/Tubeo feature flow');
 }
 
@@ -70,14 +74,6 @@ function uniqueRecommendations(items: string[]): string[] {
     seen.add(key);
     return true;
   });
-}
-
-function noTranscriptRecommendations(): string[] {
-  return [
-    'No transcript is available for this specific clip yet, so ClipWise will not reuse generic video-level recommendations.',
-    'Wait a few seconds and reopen this clip so ClipWise can try to fetch captions, or add a YouLearn source with transcript.',
-    'If captions are unavailable for this video, write your own summary and treat that as the only reliable use-case anchor.',
-  ];
 }
 
 function topicRules(): TopicRule[] {
@@ -222,14 +218,15 @@ function genericTranscriptRecommendations(clipText: string, contextLower: string
 export function buildLifeRecommendations(input: LifeRecommendationInput): string[] {
   const context = normalizeUserLifeContext(input.lifeContext);
   const contextLower = context.toLowerCase();
-  const transcriptLower = transcriptSummary(input.clipText);
-  const hasTranscript = transcriptLower.length > 0;
+  const sourceText = input.clipText?.trim() || input.summaryText?.trim() || '';
+  const sourceLower = transcriptSummary(sourceText);
+  const hasSource = sourceLower.length > 0;
 
-  if (!hasTranscript) return noTranscriptRecommendations();
+  if (!hasSource) return [];
 
   const recommendations: string[] = [];
   for (const rule of topicRules()) {
-    if (hasAny(transcriptLower, rule.terms)) {
+    if (hasAny(sourceLower, rule.terms)) {
       recommendations.push(...rule.recommendations);
     }
   }
@@ -238,5 +235,5 @@ export function buildLifeRecommendations(input: LifeRecommendationInput): string
     return uniqueRecommendations(recommendations);
   }
 
-  return uniqueRecommendations(genericTranscriptRecommendations(input.clipText ?? '', contextLower));
+  return uniqueRecommendations(genericTranscriptRecommendations(sourceText, contextLower));
 }
