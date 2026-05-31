@@ -22,6 +22,9 @@ interface YouLearnContent {
   _id?: string;
   length?: number;
   duration?: number;
+  contents?: YouLearnContent[];
+  children?: YouLearnContent[];
+  items?: YouLearnContent[];
   visibility?: string;
   transcript?: YouLearnTranscriptSegment[];
 }
@@ -30,7 +33,12 @@ interface YouLearnSpaceResponse {
   contents?: YouLearnContent[];
 }
 
-export function extractYouLearnSpaceId(url: string): string | null {
+interface YouLearnSource {
+  id: string;
+  kind: 'space' | 'folder' | 'playlist';
+}
+
+function extractYouLearnSource(url: string): YouLearnSource | null {
   const trimmed = url.trim();
   if (!trimmed) return null;
 
@@ -39,23 +47,34 @@ export function extractYouLearnSpaceId(url: string): string | null {
     if (!/(^|\.)youlearn\.ai$/i.test(parsed.hostname)) return null;
 
     const parts = parsed.pathname.split('/').filter(Boolean);
-    const containerIndex = parts.findIndex(part => part === 'space' || part === 'playlist');
+    const containerIndex = parts.findIndex(part =>
+      ['space', 'spaces', 'playlist', 'playlists', 'folder', 'folders', 'space_folder', 'space_folders'].includes(part)
+    );
     const id = containerIndex >= 0 ? parts[containerIndex + 1] : null;
-    return id && /^[a-zA-Z0-9_-]+$/.test(id) ? id : null;
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return null;
+
+    const marker = parts[containerIndex];
+    const kind = marker.includes('folder') ? 'folder' : marker.includes('playlist') ? 'playlist' : 'space';
+    return { id, kind };
   } catch {
     return null;
   }
 }
 
+export function extractYouLearnSpaceId(url: string): string | null {
+  return extractYouLearnSource(url)?.id ?? null;
+}
+
 export function isYouLearnSpaceUrl(url: string): boolean {
-  return extractYouLearnSpaceId(url) !== null;
+  return extractYouLearnSource(url) !== null;
 }
 
 export async function fetchYouLearnVideos(url: string): Promise<YouLearnVideoImport[]> {
-  const spaceId = extractYouLearnSpaceId(url);
-  if (!spaceId) throw new Error('Paste a public YouLearn space or playlist link.');
+  const source = extractYouLearnSource(url);
+  if (!source) throw new Error('Paste a public YouLearn space, folder, or playlist link.');
 
-  const response = await fetch(`/api/youlearn-space?spaceId=${encodeURIComponent(spaceId)}`);
+  const params = new URLSearchParams({ spaceId: source.id, sourceKind: source.kind });
+  const response = await fetch(`/api/youlearn-space?${params.toString()}`);
   if (!response.ok) {
     throw new Error(await readError(response));
   }
@@ -74,7 +93,7 @@ export async function fetchYouLearnTranscript(contentId: string): Promise<YouLea
 
 function normalizeYouLearnVideos(data: YouLearnSpaceResponse): YouLearnVideoImport[] {
   const seen = new Set<string>();
-  return (data.contents ?? [])
+  return collectVideos(data.contents ?? [])
     .filter(content => (content.type === 'video' || content.type === 'youtube') && typeof content.content_url === 'string')
     .map(content => ({
       title: content.title?.trim() || 'YouLearn Video',
@@ -89,6 +108,17 @@ function normalizeYouLearnVideos(data: YouLearnSpaceResponse): YouLearnVideoImpo
       seen.add(video.externalUrl);
       return true;
     });
+}
+
+function collectVideos(contents: YouLearnContent[], out: YouLearnContent[] = []): YouLearnContent[] {
+  for (const content of contents) {
+    out.push(content);
+    for (const key of ['contents', 'children', 'items'] as const) {
+      const nested = content[key];
+      if (Array.isArray(nested)) collectVideos(nested, out);
+    }
+  }
+  return out;
 }
 
 function normalizeDuration(value: number | undefined): number {

@@ -18,28 +18,17 @@ interface YouLearnContent {
   _id?: string;
   length?: number;
   duration?: number;
-  transcript?: YouLearnTranscriptSegment[];
-}
-
-interface YouLearnTranscriptChunk {
-  page_content?: string;
-  source?: number;
-  idx?: number;
-}
-
-interface YouLearnTranscriptSegment {
-  index: number;
-  startTime: number;
-  text: string;
-}
-
-interface YouLearnSpaceResponse {
   contents?: YouLearnContent[];
+  children?: YouLearnContent[];
+  items?: YouLearnContent[];
 }
+
+type YouLearnSourceKind = 'space' | 'folder' | 'playlist';
 
 export default async function handler(req: ApiRequest, res: ApiResponse) {
   const requestUrl = new URL(req.url ?? '/', 'http://localhost');
   const spaceId = requestUrl.searchParams.get('spaceId');
+  const sourceKind = normalizeSourceKind(requestUrl.searchParams.get('sourceKind'));
 
   if (req.method !== 'GET') {
     sendJson(res, 405, { error: 'Method not allowed.' });
@@ -52,25 +41,75 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
   }
 
   try {
-    const response = await fetch(`https://api.youlearn.ai/space/anonymous/${spaceId}`, {
-      headers: { Accept: 'application/json' },
-    });
-
-    if (!response.ok) {
-      sendJson(res, response.status, { error: 'This YouLearn space is not public or could not be loaded.' });
+    const { data, status } = await loadYouLearnSource(spaceId, sourceKind);
+    if (!data) {
+      sendJson(res, status || 404, { error: 'This YouLearn source is not public or could not be loaded.' });
       return;
     }
 
-    const data = await response.json() as YouLearnSpaceResponse;
-    sendJson(res, 200, { contents: await normalizeContents(data.contents ?? []) });
+    sendJson(res, 200, { contents: normalizeContents(collectContentArrays(data)) });
   } catch {
     sendJson(res, 502, { error: 'Could not reach YouLearn.' });
   }
 }
 
-async function normalizeContents(contents: YouLearnContent[]) {
+async function loadYouLearnSource(sourceId: string, sourceKind: YouLearnSourceKind) {
+  const candidates = sourceKind === 'folder'
+    ? [
+        `https://api.youlearn.ai/space_folder/anonymous/${sourceId}`,
+        `https://api.youlearn.ai/space_folders/anonymous/${sourceId}`,
+        `https://api.youlearn.ai/folder/anonymous/${sourceId}`,
+        `https://api.youlearn.ai/space/anonymous/${sourceId}`,
+      ]
+    : sourceKind === 'playlist'
+      ? [
+          `https://api.youlearn.ai/playlist/anonymous/${sourceId}`,
+          `https://api.youlearn.ai/playlists/anonymous/${sourceId}`,
+          `https://api.youlearn.ai/space/anonymous/${sourceId}`,
+        ]
+      : [`https://api.youlearn.ai/space/anonymous/${sourceId}`];
+
+  let status = 0;
+  for (const url of candidates) {
+    const response = await fetch(url, {
+      headers: { Accept: 'application/json' },
+    });
+    status = response.status;
+    if (response.ok) {
+      return { data: await response.json() as unknown, status };
+    }
+  }
+
+  return { data: null, status };
+}
+
+function normalizeSourceKind(value: string | null): YouLearnSourceKind {
+  return value === 'folder' || value === 'playlist' ? value : 'space';
+}
+
+function collectContentArrays(value: unknown, out: YouLearnContent[] = []): YouLearnContent[] {
+  if (!value || typeof value !== 'object') return out;
+  const record = value as Record<string, unknown>;
+
+  for (const key of ['contents', 'children', 'items', 'videos', 'data'] as const) {
+    const next = record[key];
+    if (Array.isArray(next)) {
+      out.push(...(next as YouLearnContent[]));
+      for (const item of next) collectContentArrays(item, out);
+    } else if (next && typeof next === 'object') {
+      collectContentArrays(next, out);
+    }
+  }
+
+  return out;
+}
+
+function normalizeContents(contents: YouLearnContent[]) {
+  const seen = new Set<string>();
   const videos = contents
-    .filter(content => (content.type === 'video' || content.type === 'youtube') && typeof content.content_url === 'string')
+    .filter((content): content is YouLearnContent & { content_url: string } =>
+      (content.type === 'video' || content.type === 'youtube') && typeof content.content_url === 'string'
+    )
     .map(content => ({
       type: 'video',
       title: content.title?.trim() || 'YouLearn Video',
@@ -78,53 +117,19 @@ async function normalizeContents(contents: YouLearnContent[]) {
       thumbnail_url: content.thumbnail_url,
       content_id: content.content_id ?? content._id,
       length: normalizeDuration(content.length ?? content.duration),
-    }));
-
-  return Promise.all(videos.map(async video => ({
-    ...video,
-    transcript: video.content_id ? await fetchTranscript(video.content_id) : undefined,
-  })));
-}
-
-async function fetchTranscript(contentId: string): Promise<YouLearnTranscriptSegment[] | undefined> {
-  try {
-    const response = await fetch('https://api.youlearn.ai/content/transcript', {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        'x-platform': 'web',
-        Referer: 'https://app.youlearn.ai/',
-      },
-      body: JSON.stringify({ user_id: 'anonymous', content_id: contentId }),
+    }))
+    .filter(video => {
+      const key = video.content_id ?? video.content_url;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
     });
 
-    if (!response.ok) return undefined;
-    const chunks = await response.json() as YouLearnTranscriptChunk[];
-    return normalizeTranscript(chunks);
-  } catch {
-    return undefined;
-  }
-}
-
-function normalizeTranscript(chunks: YouLearnTranscriptChunk[]): YouLearnTranscriptSegment[] | undefined {
-  const transcript = chunks
-    .map((chunk, fallbackIndex) => ({
-      index: typeof chunk.idx === 'number' ? chunk.idx : fallbackIndex,
-      startTime: normalizeTime(chunk.source),
-      text: typeof chunk.page_content === 'string' ? chunk.page_content.trim() : '',
-    }))
-    .filter(segment => segment.text);
-
-  return transcript.length > 0 ? transcript : undefined;
+  return videos.slice(0, 300);
 }
 
 function normalizeDuration(value: number | undefined): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
-}
-
-function normalizeTime(value: number | undefined): number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
 function sendJson(res: ApiResponse, statusCode: number, body: unknown) {

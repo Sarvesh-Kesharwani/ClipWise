@@ -3,6 +3,7 @@ import YouTubePlayer from '../YouTubePlayer';
 import type { PlayerRef, Video } from '../../types';
 import { formatTime } from '../../utils/helpers';
 import { getVideoFile } from '../../utils/videoDb';
+import { extractYouTubeId } from '../../utils/youtube';
 import type { FeedClip } from './feedClips';
 
 interface Props {
@@ -117,6 +118,11 @@ function FeedClipCard({
   const [muted, setMuted] = useState(defaultMuted);
   const [currentTime, setCurrentTime] = useState(clip.startTime);
   const [scrubbing, setScrubbing] = useState(false);
+  const youLearnYouTubeId = clip.video.source === 'youlearn'
+    ? clip.video.youtubeId ?? extractYouTubeId(clip.video.externalUrl ?? '')
+    : null;
+  const feedYouTubeId = clip.video.source === 'youtube' ? clip.video.youtubeId : youLearnYouTubeId;
+  const isFileBacked = clip.video.source === 'local' || (clip.video.source === 'youlearn' && !feedYouTubeId);
 
   const setMutedState = useCallback((value: boolean) => {
     mutedRef.current = value;
@@ -141,7 +147,7 @@ function FeedClipCard({
   useEffect(() => {
     if (!preload) return;
 
-    if (clip.video.source === 'youlearn') {
+    if (clip.video.source === 'youlearn' && !feedYouTubeId) {
       queueMicrotask(() => setMediaSrc(clip.video.externalUrl ?? ''));
       return () => setMediaSrc('');
     }
@@ -164,7 +170,7 @@ function FeedClipCard({
         return '';
       });
     };
-  }, [clip.video.externalUrl, clip.video.id, clip.video.source, preload]);
+  }, [clip.video.externalUrl, clip.video.id, clip.video.source, feedYouTubeId, preload]);
 
   useEffect(() => {
     if (!active) {
@@ -180,7 +186,7 @@ function FeedClipCard({
       return;
     }
 
-    if ((clip.video.source === 'local' || clip.video.source === 'youlearn') && localVideoRef.current && mediaSrc) {
+    if (isFileBacked && localVideoRef.current && mediaSrc) {
       localVideoRef.current.currentTime = clip.startTime;
       localVideoRef.current.muted = mutedRef.current;
       void localVideoRef.current.play()
@@ -194,14 +200,14 @@ function FeedClipCard({
           setMutedState(true);
           void localVideoRef.current.play().then(() => setPaused(false)).catch(() => setPaused(true));
         });
-    } else if (clip.video.source === 'youtube') {
+    } else if (feedYouTubeId) {
       if (mutedRef.current) youtubeRef.current?.mute?.();
       else youtubeRef.current?.unMute?.();
       youtubeRef.current?.seek(clip.startTime);
       youtubeRef.current?.play();
       queueMicrotask(() => setPaused(false));
     }
-  }, [active, clip.startTime, clip.video.source, mediaSrc, defaultMuted, setMutedState]);
+  }, [active, clip.startTime, clip.video.source, feedYouTubeId, isFileBacked, mediaSrc, defaultMuted, setMutedState]);
 
   function completeClip() {
     if (completedRef.current) return;
@@ -210,7 +216,7 @@ function FeedClipCard({
   }
 
   function playMedia() {
-    if (clip.video.source === 'local' || clip.video.source === 'youlearn') {
+    if (isFileBacked) {
       const player = localVideoRef.current;
       if (!player) return;
       void player.play().then(() => setPaused(false)).catch(() => setPaused(true));
@@ -230,7 +236,7 @@ function FeedClipCard({
   function seekTo(time: number) {
     const nextTime = Math.max(clip.startTime, Math.min(clip.endTime - 0.05, time));
     setCurrentTime(nextTime);
-    if (clip.video.source === 'local' || clip.video.source === 'youlearn') {
+    if (isFileBacked) {
       if (localVideoRef.current) localVideoRef.current.currentTime = nextTime;
     } else {
       youtubeRef.current?.seek(nextTime);
@@ -279,7 +285,7 @@ function FeedClipCard({
   }
 
   function togglePlay() {
-    if (clip.video.source === 'local' || clip.video.source === 'youlearn') {
+    if (isFileBacked) {
       const player = localVideoRef.current;
       if (!player) return;
       if (player.muted) {
@@ -333,7 +339,7 @@ function FeedClipCard({
   return (
     <section ref={cardRef} id={clip.id} className="feed-clip-card">
       <div className="feed-media-frame">
-        {clip.video.source === 'local' || clip.video.source === 'youlearn' ? (
+        {isFileBacked ? (
           preload && mediaSrc ? (
             <video
               ref={localVideoRef}
@@ -371,7 +377,7 @@ function FeedClipCard({
         ) : preload ? (
           <YouTubePlayer
             ref={youtubeRef}
-            videoId={clip.video.youtubeId!}
+            videoId={feedYouTubeId!}
             autoPlay={active}
             muted={muted}
             onTimeUpdate={handleTimeUpdate}

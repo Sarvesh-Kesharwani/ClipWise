@@ -10,7 +10,7 @@ import type { Clip, Instance, PlayerRef, RemixClipRef, Video } from '../types';
 import { formatTime } from '../utils/helpers';
 import { getVideoFile } from '../utils/videoDb';
 import { WatchTracker } from '../utils/watchTracker';
-import { fetchYouTubeTranscript } from '../utils/youtube';
+import { extractYouTubeId, fetchYouTubeTranscript } from '../utils/youtube';
 import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
 
 const CELEBRATION_DURATION_MS = 1600;
@@ -314,6 +314,13 @@ export default function RemixPlayerPage() {
       .join(' ')
     : '';
   const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipProgress)) * 100);
+  const currentYouTubeId = currentItem.video.source === 'youtube'
+    ? currentItem.video.youtubeId
+    : currentItem.video.source === 'youlearn'
+      ? currentItem.video.youtubeId ?? extractYouTubeId(currentItem.video.externalUrl ?? '')
+      : null;
+  const useFilePlayer = currentItem.video.source === 'local'
+    || (currentItem.video.source === 'youlearn' && !currentYouTubeId);
 
   return (
     <div className="cw-page player-page remix-player-page">
@@ -350,7 +357,7 @@ export default function RemixPlayerPage() {
         </div>
 
         <div className="player-video-container">
-          {currentItem.video.source === 'local' || currentItem.video.source === 'youlearn' ? (
+          {useFilePlayer ? (
             <LocalPlayer
               key={currentItem.ref.id}
               ref={playerRef}
@@ -365,7 +372,7 @@ export default function RemixPlayerPage() {
             <YouTubePlayer
               key={currentItem.ref.id}
               ref={playerRef}
-              videoId={currentItem.video.youtubeId!}
+              videoId={currentYouTubeId!}
               onTimeUpdate={handleTimeUpdate}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}

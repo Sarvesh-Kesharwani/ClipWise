@@ -12,7 +12,7 @@ import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
 import { formatTime } from '../utils/helpers';
 import { fetchYouLearnTranscript } from '../utils/youlearn';
-import { fetchYouTubeTranscript } from '../utils/youtube';
+import { extractYouTubeId, fetchYouTubeTranscript } from '../utils/youtube';
 import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
 
 const CELEBRATION_DURATION_MS = 1600;
@@ -353,6 +353,11 @@ export default function PlayerPage() {
       .join(' ')
     : '';
   const clipProgressPct = Math.round(Math.min(1, Math.max(0, clipWatchProgress)) * 100);
+  const youLearnYouTubeId = video.source === 'youlearn'
+    ? video.youtubeId ?? extractYouTubeId(video.externalUrl ?? '')
+    : null;
+  const playerYouTubeId = video.source === 'youtube' ? video.youtubeId : youLearnYouTubeId;
+  const useFilePlayer = video.source === 'local' || (video.source === 'youlearn' && !playerYouTubeId);
 
   return (
     <div className="cw-page player-page">
@@ -388,7 +393,7 @@ export default function PlayerPage() {
 
       <div className="player-main">
         <div className="player-video-container">
-          {video.source === 'local' || video.source === 'youlearn' ? (
+          {useFilePlayer ? (
             <LocalPlayer
               ref={playerRef}
               src={videoSrc}
@@ -401,7 +406,7 @@ export default function PlayerPage() {
           ) : (
             <YouTubePlayer
               ref={playerRef}
-              videoId={video.youtubeId!}
+              videoId={playerYouTubeId!}
               onTimeUpdate={handleTimeUpdate}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}

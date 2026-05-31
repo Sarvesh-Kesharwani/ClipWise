@@ -179,10 +179,12 @@ export default function AddVideoModal({ onClose }: Props) {
 
       for (let i = 0; i < videos.length; i++) {
         const video = videos[i];
+        const youtubeId = extractYouTubeId(video.externalUrl);
         addVideo({
           id: generateId(),
           title: video.title,
           source: 'youlearn',
+          youtubeId: youtubeId ?? undefined,
           externalUrl: video.externalUrl,
           youlearnContentId: video.contentId,
           youlearnSpaceUrl: youtubeUrl,
