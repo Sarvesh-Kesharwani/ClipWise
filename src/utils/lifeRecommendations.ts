@@ -5,7 +5,7 @@ const LEGACY_USER_LIFE_CONTEXT = [
 ].join(' ');
 
 export const CONTEXT_ABOUT_ME_NOTION_URL = 'https://www.notion.so/3700e89f89e780929e14da3cb2e44779';
-export const LIFE_RECOMMENDATIONS_VERSION = 3;
+export const LIFE_RECOMMENDATIONS_VERSION = 4;
 
 export const DEFAULT_USER_LIFE_CONTEXT = [
   'Source: Notion context-about-me profile.',
@@ -19,7 +19,6 @@ interface LifeRecommendationInput {
   lifeContext: string;
   videoTitle?: string;
   clipText?: string;
-  summaryText?: string;
 }
 
 interface TopicRule {
@@ -218,7 +217,7 @@ function genericTranscriptRecommendations(clipText: string, contextLower: string
 export function buildLifeRecommendations(input: LifeRecommendationInput): string[] {
   const context = normalizeUserLifeContext(input.lifeContext);
   const contextLower = context.toLowerCase();
-  const sourceText = input.clipText?.trim() || input.summaryText?.trim() || '';
+  const sourceText = input.clipText?.trim() || '';
   const sourceLower = transcriptSummary(sourceText);
   const hasSource = sourceLower.length > 0;
 

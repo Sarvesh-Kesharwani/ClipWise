@@ -1,15 +1,51 @@
 import type { TranscriptSegment } from '../types';
 
 export function extractYouTubeId(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = new URL(trimmed);
+    const host = parsed.hostname.replace(/^www\./, '').toLowerCase();
+
+    if (host === 'youtu.be') {
+      return normalizeYouTubeId(parsed.pathname.split('/').filter(Boolean)[0]);
+    }
+
+    if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      const directId = parsed.searchParams.get('v') || parsed.searchParams.get('vi');
+      if (directId) return normalizeYouTubeId(directId);
+
+      const parts = parsed.pathname.split('/').filter(Boolean);
+      const markerIndex = parts.findIndex(part => ['embed', 'shorts', 'live', 'v', 'e'].includes(part));
+      if (markerIndex >= 0) return normalizeYouTubeId(parts[markerIndex + 1]);
+
+      const nestedUrl = parsed.searchParams.get('u') || parsed.searchParams.get('url') || parsed.searchParams.get('q');
+      if (nestedUrl) {
+        const nestedId = extractYouTubeId(decodeURIComponent(nestedUrl));
+        if (nestedId) return nestedId;
+      }
+    }
+  } catch {
+    // Fall through to regex extraction for loose or embedded URLs.
+  }
+
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s?#]+)/,
-    /youtube\.com\/shorts\/([^&\s?#]+)/,
+    /(?:youtube(?:-nocookie)?\.com\/(?:watch\?[^#\s]*v=|embed\/|shorts\/|live\/|v\/|e\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/,
+    /(?:[?&](?:v|vi)=)([a-zA-Z0-9_-]{6,})/,
   ];
   for (const pattern of patterns) {
-    const match = url.match(pattern);
-    if (match) return match[1];
+    const match = trimmed.match(pattern);
+    const id = normalizeYouTubeId(match?.[1]);
+    if (id) return id;
   }
   return null;
+}
+
+function normalizeYouTubeId(value: string | undefined | null): string | null {
+  if (!value) return null;
+  const [id] = value.split(/[?&#/]/);
+  return /^[a-zA-Z0-9_-]{6,}$/.test(id) ? id : null;
 }
 
 export function extractPlaylistId(url: string): string | null {

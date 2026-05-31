@@ -31,9 +31,8 @@ export default function SummaryModal({
       lifeContext,
       videoTitle,
       clipText,
-      summaryText: trimmedText,
     });
-  }, [clipText, lifeContext, trimmedText, videoTitle]);
+  }, [clipText, lifeContext, videoTitle]);
 
   function handleSave() {
     if (!trimmedText) return;

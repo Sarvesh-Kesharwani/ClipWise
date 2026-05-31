@@ -183,8 +183,9 @@ export default function AddVideoModal({ onClose }: Props) {
         addVideo({
           id: generateId(),
           title: video.title,
-          source: 'youlearn',
+          source: youtubeId ? 'youtube' : 'youlearn',
           youtubeId: youtubeId ?? undefined,
+          youtubeUrl: youtubeId ? video.externalUrl : undefined,
           externalUrl: video.externalUrl,
           youlearnContentId: video.contentId,
           youlearnSpaceUrl: youtubeUrl,

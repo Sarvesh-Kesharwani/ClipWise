@@ -10,6 +10,7 @@ import type { Clip, Instance, PlayerRef, RemixClipRef, Video } from '../types';
 import { formatTime } from '../utils/helpers';
 import { getVideoFile } from '../utils/videoDb';
 import { WatchTracker } from '../utils/watchTracker';
+import { fetchYouLearnTranscript } from '../utils/youlearn';
 import { extractYouTubeId, fetchYouTubeTranscript } from '../utils/youtube';
 import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
 
@@ -192,7 +193,21 @@ export default function RemixPlayerPage() {
   }, [currentRefId, currentItem]);
 
   useEffect(() => {
-    if (!currentItem?.video.youtubeId || currentItem.video.source !== 'youtube' || currentItem.video.youlearnTranscript?.length) return;
+    if (!currentItem?.video.youlearnContentId || currentItem.video.youlearnTranscript?.length) return;
+    let cancelled = false;
+
+    fetchYouLearnTranscript(currentItem.video.youlearnContentId).then(transcript => {
+      if (cancelled || transcript.length === 0) return;
+      updateVideo({ ...currentItem.video, youlearnTranscript: transcript });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentItem, updateVideo]);
+
+  useEffect(() => {
+    if (!currentItem?.video.youtubeId || currentItem.video.youlearnContentId || currentItem.video.source !== 'youtube' || currentItem.video.youlearnTranscript?.length) return;
     let cancelled = false;
 
     fetchYouTubeTranscript(currentItem.video.youtubeId).then(transcript => {

@@ -150,7 +150,7 @@ export default function PlayerPage() {
   }, [video, duration, updateVideo]);
 
   useEffect(() => {
-    if (!video || video.source !== 'youlearn' || !video.youlearnContentId || video.youlearnTranscript?.length) return;
+    if (!video || !video.youlearnContentId || video.youlearnTranscript?.length) return;
     let cancelled = false;
 
     fetchYouLearnTranscript(video.youlearnContentId).then(transcript => {
@@ -164,7 +164,7 @@ export default function PlayerPage() {
   }, [video, updateVideo]);
 
   useEffect(() => {
-    if (!video || video.source !== 'youtube' || !video.youtubeId || video.youlearnTranscript?.length) return;
+    if (!video || video.source !== 'youtube' || video.youlearnContentId || !video.youtubeId || video.youlearnTranscript?.length) return;
     let cancelled = false;
 
     fetchYouTubeTranscript(video.youtubeId).then(transcript => {
