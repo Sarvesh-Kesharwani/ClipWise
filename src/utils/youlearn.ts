@@ -75,7 +75,7 @@ export async function fetchYouLearnTranscript(contentId: string): Promise<YouLea
 function normalizeYouLearnVideos(data: YouLearnSpaceResponse): YouLearnVideoImport[] {
   const seen = new Set<string>();
   return (data.contents ?? [])
-    .filter(content => content.type === 'video' && typeof content.content_url === 'string')
+    .filter(content => (content.type === 'video' || content.type === 'youtube') && typeof content.content_url === 'string')
     .map(content => ({
       title: content.title?.trim() || 'YouLearn Video',
       externalUrl: content.content_url!,

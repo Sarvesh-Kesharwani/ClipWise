@@ -70,7 +70,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
 async function normalizeContents(contents: YouLearnContent[]) {
   const videos = contents
-    .filter(content => content.type === 'video' && typeof content.content_url === 'string')
+    .filter(content => (content.type === 'video' || content.type === 'youtube') && typeof content.content_url === 'string')
     .map(content => ({
       type: 'video',
       title: content.title?.trim() || 'YouLearn Video',
