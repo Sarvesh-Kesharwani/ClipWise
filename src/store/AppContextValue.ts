@@ -60,7 +60,7 @@ export interface AppContextType {
   resetProgress: () => void;
   signOut: () => Promise<void>;
   syncToCloud: () => Promise<void>;
-  loadFromCloud: () => Promise<void>;
+  loadFromCloud: (options?: { force?: boolean }) => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

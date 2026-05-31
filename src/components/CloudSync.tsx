@@ -20,7 +20,7 @@ export default function CloudSync({ compact }: Props) {
         <div className="cloud-sync-actions">
           <button
             className="cw-btn cw-btn-secondary"
-            onClick={() => void loadFromCloud()}
+            onClick={() => void loadFromCloud({ force: true })}
             disabled={isBusy}
           >
             {cloudSync.status === 'loading' ? 'Loading...' : 'Load'}
@@ -47,7 +47,7 @@ export default function CloudSync({ compact }: Props) {
       <div className="cloud-sync-actions">
         <button
           className="cw-btn cw-btn-secondary"
-          onClick={() => void loadFromCloud()}
+          onClick={() => void loadFromCloud({ force: true })}
           disabled={isBusy}
         >
           {cloudSync.status === 'loading' ? 'Loading...' : 'Load from Supabase'}

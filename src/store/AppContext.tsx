@@ -99,16 +99,16 @@ function migrateAppData(data: AppData): AppData {
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [storedData] = useState(() => loadStoredAppData());
   const [storedCloudSession] = useState(() => loadCloudSession());
-  const needsInitialCloudRestore = true;
+  const [hasStoredLocalData] = useState(storedData.hasStoredData);
   const [data, setData] = useState<AppData>(() => migrateAppData(storedData.data));
   const [dataUpdatedAt, setDataUpdatedAt] = useState(storedData.updatedAt);
   const [cloudSync, setCloudSync] = useState<CloudSyncState>({
     isConfigured: true,
     isSignedIn: true,
     hasPendingChanges: false,
-    requiresDriveRestore: needsInitialCloudRestore,
-    status: 'restoring',
-    message: 'Loading Supabase data before local edits...',
+    requiresDriveRestore: false,
+    status: 'loading',
+    message: 'Loading Supabase in background...',
     lastSyncedAt: storedCloudSession?.lastSyncedAt ?? null,
     fileId: storedCloudSession?.fileId ?? null,
     userProfile: storedCloudSession?.userProfile ?? {
@@ -125,8 +125,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const dataRef = React.useRef(data);
   const dataUpdatedAtRef = React.useRef(dataUpdatedAt);
   const cloudSyncRef = React.useRef(cloudSync);
-  const driveRestoreReadyRef = React.useRef(!needsInitialCloudRestore);
+  const driveRestoreReadyRef = React.useRef(true);
   const autoRestoreStartedRef = React.useRef(false);
+  const shouldPersistLocalRef = React.useRef(hasStoredLocalData);
 
   useEffect(() => {
     dataRef.current = data;
@@ -135,6 +136,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [cloudSync, data, dataUpdatedAt]);
 
   useEffect(() => {
+    if (!shouldPersistLocalRef.current) return;
     saveAppData(data, dataUpdatedAt);
   }, [data, dataUpdatedAt]);
 
@@ -163,6 +165,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const setDataWithLocalChange = useCallback((updater: (prev: AppData) => AppData) => {
     if (!driveRestoreReadyRef.current) return;
+    shouldPersistLocalRef.current = true;
     const updatedAt = Date.now();
     setData(prev => updater(prev));
     setDataUpdatedAt(updatedAt);
@@ -442,6 +445,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const resetProgress = useCallback(() => {
     if (!driveRestoreReadyRef.current) return;
+    shouldPersistLocalRef.current = true;
     const emptyData: AppData = {
       videos: [],
       instances: [],
@@ -463,6 +467,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Called on explicit sign-out and when a session expires.
   const clearLocalData = useCallback(() => {
     driveRestoreReadyRef.current = true;
+    shouldPersistLocalRef.current = true;
     clearAppData();
     void clearAllVideoFiles();
     const emptyData: AppData = {
@@ -522,24 +527,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [persistCloudSession]);
 
-  const loadFromCloud = useCallback(async () => {
-    driveRestoreReadyRef.current = false;
+  const loadFromCloud = useCallback(async (options: { force?: boolean } = {}) => {
+    const startedAt = dataUpdatedAtRef.current;
     setCloudSync(prev => ({
       ...prev,
       isSignedIn: true,
       hasPendingChanges: false,
-      requiresDriveRestore: true,
+      requiresDriveRestore: false,
       status: 'loading',
-      message: 'Loading from Supabase...',
+      message: options.force ? 'Loading from Supabase...' : 'Loading Supabase in background...',
     }));
 
     try {
       const payload = await loadCloudPayload();
-      driveRestoreReadyRef.current = true;
 
       if (!payload) {
         syncFileIdRef.current = 'primary';
         lastCloudSavedAtRef.current = null;
+        shouldPersistLocalRef.current = true;
         persistCloudSession({
           fileId: 'primary',
           lastSyncedAt: null,
@@ -558,17 +563,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
+      const currentUpdatedAt = dataUpdatedAtRef.current;
+      const localChangedDuringLoad = currentUpdatedAt !== startedAt;
+      const localIsNewer = hasStoredLocalData && currentUpdatedAt > payload.savedAt;
+      const shouldKeepLocalData = !options.force && (localChangedDuringLoad || localIsNewer);
       const migrated = migrateAppData(payload.data);
       lastCloudSavedAtRef.current = payload.savedAt;
       syncFileIdRef.current = 'primary';
-      setData(migrated);
-      setDataUpdatedAt(payload.savedAt);
       const syncedAt = Date.now();
       persistCloudSession({
         fileId: 'primary',
         lastSyncedAt: syncedAt,
         lastSavedDataAt: payload.savedAt,
       });
+
+      if (shouldKeepLocalData) {
+        setCloudSync(prev => ({
+          ...prev,
+          isSignedIn: true,
+          hasPendingChanges: currentUpdatedAt !== payload.savedAt,
+          requiresDriveRestore: false,
+          fileId: 'primary',
+          status: 'idle',
+          message: localChangedDuringLoad
+            ? 'Supabase loaded. Local edits were kept.'
+            : 'Local data is newer than Supabase. Save to update backup.',
+          lastSyncedAt: syncedAt,
+        }));
+        return;
+      }
+
+      shouldPersistLocalRef.current = true;
+      setData(migrated);
+      setDataUpdatedAt(payload.savedAt);
       setCloudSync(prev => ({
         ...prev,
         isSignedIn: true,
@@ -580,7 +607,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         lastSyncedAt: syncedAt,
       }));
     } catch (error) {
-      driveRestoreReadyRef.current = true;
       setCloudSync(prev => ({
         ...prev,
         isSignedIn: true,
@@ -589,7 +615,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         message: error instanceof Error ? error.message : 'Could not load from Supabase.',
       }));
     }
-  }, [persistCloudSession]);
+  }, [hasStoredLocalData, persistCloudSession]);
 
   const signOut = useCallback(async () => {
     clearCloudSession();

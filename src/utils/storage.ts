@@ -10,6 +10,7 @@ const CLOUD_SESSION_KEY = 'clipwise-cloud-session';
 export interface StoredAppData {
   data: AppData;
   updatedAt: number;
+  hasStoredData: boolean;
 }
 
 export interface StoredCloudSession {
@@ -55,12 +56,12 @@ export function loadStoredAppData(): StoredAppData {
     if (raw) {
       const data = JSON.parse(raw) as AppData;
       const updatedAt = Number(localStorage.getItem(STORAGE_UPDATED_AT_KEY)) || now();
-      return { data: { ...data, userLifeContext: normalizeUserLifeContext(data.userLifeContext) }, updatedAt };
+      return { data: { ...data, userLifeContext: normalizeUserLifeContext(data.userLifeContext) }, updatedAt, hasStoredData: true };
     }
   } catch (e) {
     console.error('Failed to load app data:', e);
   }
-  return { data: emptyAppData(), updatedAt: now() };
+  return { data: emptyAppData(), updatedAt: now(), hasStoredData: false };
 }
 
 export function saveAppData(data: AppData, updatedAt = now()): void {
