@@ -45,7 +45,6 @@ const LocalPlayer = forwardRef<PlayerRef, Props>(({ src, onTimeUpdate, onPlay, o
       onPlay={onPlay}
       onPause={onPause}
       onEnded={onEnded}
-      controls
       playsInline
     />
   );

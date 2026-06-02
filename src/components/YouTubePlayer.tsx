@@ -76,10 +76,11 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
           height: '100%',
           playerVars: {
             autoplay: optionsRef.current.autoPlay ? 1 : 0,
-            controls: 1,
+            controls: 0,
+            disablekb: 1,
             modestbranding: 1,
             rel: 0,
-            fs: 1,
+            fs: 0,
             playsinline: 1,
             mute: optionsRef.current.muted ? 1 : 0,
           },

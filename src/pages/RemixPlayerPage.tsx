@@ -287,6 +287,14 @@ export default function RemixPlayerPage() {
     setShowSummary(false);
   }
 
+  function togglePlayback() {
+    if (isPlaying) {
+      playerRef.current?.pause();
+      return;
+    }
+    playerRef.current?.play();
+  }
+
   if (!remix) {
     return (
       <div className="player-error">
@@ -415,6 +423,9 @@ export default function RemixPlayerPage() {
         <div className="player-controls-row">
           <button className="btn-secondary" onClick={() => seekToRemixIndex(currentIndex - 1)} disabled={currentIndex === 0}>
             Previous
+          </button>
+          <button className="btn-secondary" onClick={togglePlayback}>
+            {isPlaying ? 'Pause' : 'Play'}
           </button>
           <div className="clip-indicator">
             Clip {currentIndex + 1} of {items.length}

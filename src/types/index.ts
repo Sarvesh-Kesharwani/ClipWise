@@ -65,9 +65,18 @@ export interface Clip {
   duration: number;
   watchCount: number;
   summary: string;
+  notes?: ClipNote[];
   lifeRecommendations?: string[];
   lifeContextSnapshot?: string;
   lifeRecommendationsVersion?: number;
+}
+
+export interface ClipNote {
+  id: string;
+  startTime: number;
+  endTime: number;
+  text: string;
+  createdAt: number;
 }
 
 export interface RemixClipRef {

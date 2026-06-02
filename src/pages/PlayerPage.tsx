@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store/useApp';
 import LocalPlayer from '../components/LocalPlayer';
@@ -7,16 +7,91 @@ import ClipPanel from '../components/ClipPanel';
 import SegmentedProgressBar from '../components/SegmentedProgressBar';
 import SummaryModal from '../components/SummaryModal';
 import MobileNav from '../components/MobileNav';
-import type { Clip, PlayerRef } from '../types';
+import type { Clip, ClipNote, PlayerRef } from '../types';
 import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
-import { formatTime } from '../utils/helpers';
+import { formatTime, generateId } from '../utils/helpers';
 import { fetchYouLearnTranscript } from '../utils/youlearn';
 import { extractYouTubeId, fetchYouTubeTranscript } from '../utils/youtube';
 import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
 
 const CELEBRATION_DURATION_MS = 1600;
 const SUMMARY_PROMPT_DELAY_MS = 900;
+
+interface TimeRange {
+  start: number;
+  end: number;
+}
+
+interface NoteDraftWindow extends TimeRange {
+  clipIndex: number;
+}
+
+function clampTime(value: number, duration: number) {
+  return Math.max(0, Math.min(duration || 0, value));
+}
+
+function normalizeRanges(ranges: TimeRange[], duration: number): TimeRange[] {
+  const sorted = ranges
+    .map(range => ({
+      start: clampTime(Math.min(range.start, range.end), duration),
+      end: clampTime(Math.max(range.start, range.end), duration),
+    }))
+    .filter(range => range.end - range.start > 0.1)
+    .sort((a, b) => a.start - b.start);
+
+  const merged: TimeRange[] = [];
+  for (const range of sorted) {
+    const previous = merged[merged.length - 1];
+    if (previous && range.start <= previous.end + 0.25) {
+      previous.end = Math.max(previous.end, range.end);
+    } else {
+      merged.push({ ...range });
+    }
+  }
+  return merged;
+}
+
+function getRemainingRanges(duration: number, watchedRanges: TimeRange[]): TimeRange[] {
+  if (duration <= 0) return [];
+
+  const remaining: TimeRange[] = [];
+  let cursor = 0;
+  for (const watched of watchedRanges) {
+    if (watched.start > cursor) {
+      remaining.push({ start: cursor, end: watched.start });
+    }
+    cursor = Math.max(cursor, watched.end);
+  }
+  if (cursor < duration) {
+    remaining.push({ start: cursor, end: duration });
+  }
+  return remaining.filter(range => range.end - range.start > 0.1);
+}
+
+function sumRanges(ranges: TimeRange[]) {
+  return ranges.reduce((total, range) => total + Math.max(0, range.end - range.start), 0);
+}
+
+function timeToRemainingOffset(time: number, ranges: TimeRange[]) {
+  let offset = 0;
+  for (const range of ranges) {
+    if (time <= range.start) return offset;
+    if (time <= range.end) return offset + (time - range.start);
+    offset += range.end - range.start;
+  }
+  return offset;
+}
+
+function remainingOffsetToTime(offset: number, ranges: TimeRange[]) {
+  let cursor = Math.max(0, offset);
+  for (const range of ranges) {
+    const length = range.end - range.start;
+    if (cursor <= length) return range.start + cursor;
+    cursor -= length;
+  }
+  return ranges[ranges.length - 1]?.end ?? 0;
+}
 
 export default function PlayerPage() {
   const { instanceId } = useParams<{ instanceId: string }>();
@@ -36,12 +111,18 @@ export default function PlayerPage() {
   const video = instance ? getVideo(instance.videoId) : null;
 
   const playerRef = useRef<PlayerRef>(null);
+  const fullscreenHostRef = useRef<HTMLDivElement>(null);
+  const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const noteSegmentStartRef = useRef<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [activeClipIndex, setActiveClipIndex] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [summaryClipIndex, setSummaryClipIndex] = useState(-1);
+  const [noteWindow, setNoteWindow] = useState<NoteDraftWindow | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
   const [videoSrc, setVideoSrc] = useState('');
   const [loading, setLoading] = useState(true);
   const [clipWatchProgress, setClipWatchProgress] = useState(0);
@@ -55,14 +136,114 @@ export default function PlayerPage() {
   const summaryTimerRef = useRef<number | null>(null);
 
   const clips = useMemo(() => instance?.clips || [], [instance?.clips]);
+  const watchedNoteRanges = useMemo(
+    () => normalizeRanges(
+      clips.flatMap(clip => (clip.notes ?? []).map(note => ({ start: note.startTime, end: note.endTime }))),
+      duration,
+    ),
+    [clips, duration],
+  );
+  const remainingRanges = useMemo(
+    () => getRemainingRanges(duration, watchedNoteRanges),
+    [duration, watchedNoteRanges],
+  );
+  const remainingDuration = useMemo(() => sumRanges(remainingRanges), [remainingRanges]);
+  const totalRemainingWidthPct = duration > 0 ? Math.max(0, Math.min(100, (remainingDuration / duration) * 100)) : 100;
+  const remainingPlayheadPct = remainingDuration > 0
+    ? Math.max(0, Math.min(100, (timeToRemainingOffset(currentTime, remainingRanges) / remainingDuration) * 100))
+    : 100;
 
   function needsSummary(clip: Clip | undefined): clip is Clip {
     return Boolean(clip && clip.watchCount > 0 && !clip.summary.trim());
   }
 
+  function getClipIndexForTime(time: number): number {
+    if (!clips.length) return 0;
+    for (let i = 0; i < clips.length; i++) {
+      if (time >= clips[i].startTime && time < clips[i].endTime) {
+        return i;
+      }
+    }
+    return clips.length - 1;
+  }
+
   function openSummary(clipIndex: number) {
     setSummaryClipIndex(clipIndex);
     setShowSummary(true);
+  }
+
+  function handlePlayerPlay() {
+    if (noteSegmentStartRef.current === null) {
+      noteSegmentStartRef.current = currentTime;
+    }
+    setIsPlaying(true);
+  }
+
+  function togglePlayback() {
+    if (isPlaying) {
+      playerRef.current?.pause();
+      return;
+    }
+
+    if (noteSegmentStartRef.current === null) {
+      noteSegmentStartRef.current = currentTime;
+    }
+    playerRef.current?.play();
+  }
+
+  function toggleFullscreen() {
+    const fullscreenElement = document.fullscreenElement;
+    if (fullscreenElement) {
+      void document.exitFullscreen();
+      return;
+    }
+    void fullscreenHostRef.current?.requestFullscreen();
+  }
+
+  function openInlineNote() {
+    if (!instance || noteWindow) return;
+
+    const endTime = clampTime(currentTime, duration);
+    const startTime = clampTime(noteSegmentStartRef.current ?? endTime, duration);
+    const clipIndex = getClipIndexForTime(endTime);
+
+    playerRef.current?.pause();
+    setNoteWindow({ start: startTime, end: endTime, clipIndex });
+    setNoteDraft('');
+  }
+
+  function handleSaveInlineNote() {
+    if (!instance || !noteWindow) return;
+    const noteText = noteDraft.trim();
+    if (!noteText) return;
+
+    const clip = clips[noteWindow.clipIndex];
+    if (!clip) return;
+
+    const start = clampTime(Math.min(noteWindow.start, noteWindow.end), duration);
+    const end = clampTime(Math.max(noteWindow.start, noteWindow.end), duration);
+    const note: ClipNote = {
+      id: generateId(),
+      startTime: start,
+      endTime: end > start ? end : Math.min(duration, start + 0.5),
+      text: noteText,
+      createdAt: Date.now(),
+    };
+
+    updateClip(instance.id, clip.index, {
+      notes: [...(clip.notes ?? []), note],
+    });
+    recordClipWatched(instance.videoId);
+    noteSegmentStartRef.current = note.endTime;
+    setNoteWindow(null);
+    setNoteDraft('');
+  }
+
+  function handleRemainingProgressClick(event: ReactMouseEvent<HTMLDivElement>) {
+    if (remainingDuration <= 0) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
+    seekToTime(remainingOffsetToTime(pct * remainingDuration, remainingRanges));
   }
 
   function triggerCelebration(clipIndex: number) {
@@ -188,15 +369,38 @@ export default function PlayerPage() {
     };
   }, []);
 
-  const getClipIndexForTime = useCallback((time: number): number => {
-    if (!clips.length) return 0;
-    for (let i = 0; i < clips.length; i++) {
-      if (time >= clips[i].startTime && time < clips[i].endTime) {
-        return i;
+  useEffect(() => {
+    function handleFullscreenChange() {
+      setIsFullscreen(document.fullscreenElement === fullscreenHostRef.current);
+    }
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!noteWindow) return;
+    window.setTimeout(() => noteTextareaRef.current?.focus(), 0);
+  }, [noteWindow]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      const isTyping = target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+        || (target instanceof HTMLElement && target.isContentEditable);
+
+      if (isTyping || showSummary) return;
+      if (event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        openInlineNote();
       }
     }
-    return clips.length - 1;
-  }, [clips]);
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
 
   function handleTimeUpdate(time: number) {
     // Skip stale time updates that arrive during a pending seek
@@ -279,6 +483,7 @@ export default function PlayerPage() {
 
     // Suppress stale time updates while seeking
     seekingRef.current = true;
+    noteSegmentStartRef.current = time;
     setCurrentTime(time);
 
     playerRef.current?.seek(time);
@@ -392,13 +597,16 @@ export default function PlayerPage() {
       </div>
 
       <div className="player-main">
-        <div className="player-video-container">
+        <div
+          ref={fullscreenHostRef}
+          className={`player-video-container custom-video-shell ${isFullscreen ? 'is-fullscreen' : ''}`}
+        >
           {useFilePlayer ? (
             <LocalPlayer
               ref={playerRef}
               src={videoSrc}
               onTimeUpdate={handleTimeUpdate}
-              onPlay={() => setIsPlaying(true)}
+              onPlay={handlePlayerPlay}
               onPause={() => setIsPlaying(false)}
               onReady={handleReady}
               onEnded={() => setIsPlaying(false)}
@@ -408,11 +616,97 @@ export default function PlayerPage() {
               ref={playerRef}
               videoId={playerYouTubeId!}
               onTimeUpdate={handleTimeUpdate}
-              onPlay={() => setIsPlaying(true)}
+              onPlay={handlePlayerPlay}
               onPause={() => setIsPlaying(false)}
               onReady={handleReady}
               onEnded={() => setIsPlaying(false)}
             />
+          )}
+
+          <div className="custom-video-controls" aria-label="Video controls">
+            <div className="custom-video-controls-row">
+              <button
+                type="button"
+                className="custom-video-btn"
+                onClick={togglePlayback}
+                aria-label={isPlaying ? 'Pause video' : 'Play video'}
+              >
+                {isPlaying ? 'Pause' : 'Play'}
+              </button>
+              <button
+                type="button"
+                className="custom-video-btn note-shortcut-btn"
+                onClick={openInlineNote}
+                aria-label="Add note at current timestamp"
+              >
+                N Note
+              </button>
+              <span className="custom-video-time">
+                {formatTime(currentTime)} / {formatTime(duration)}
+                <span>{formatTime(remainingDuration)} left</span>
+              </span>
+              <button
+                type="button"
+                className="custom-video-btn"
+                onClick={toggleFullscreen}
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+              >
+                {isFullscreen ? 'Exit' : 'Fullscreen'}
+              </button>
+            </div>
+
+            <div className="remaining-progress-rail" aria-label="Remaining video progress">
+              <div
+                className={`remaining-progress-track ${remainingDuration <= 0 ? 'empty' : ''}`}
+                style={{ width: `${totalRemainingWidthPct}%` }}
+                role="slider"
+                aria-valuemin={0}
+                aria-valuemax={Math.round(remainingDuration)}
+                aria-valuenow={Math.round(timeToRemainingOffset(currentTime, remainingRanges))}
+                tabIndex={0}
+                onClick={handleRemainingProgressClick}
+              >
+                {remainingRanges.map(range => (
+                  <div
+                    key={`${range.start}-${range.end}`}
+                    className="remaining-progress-segment"
+                    style={{ width: `${(range.end - range.start) / Math.max(1, remainingDuration) * 100}%` }}
+                  />
+                ))}
+                <div className="remaining-progress-playhead" style={{ left: `${remainingPlayheadPct}%` }} />
+              </div>
+            </div>
+          </div>
+
+          {noteWindow && (
+            <div className="fullscreen-note-overlay" role="dialog" aria-modal="true" aria-label="Save timestamp note">
+              <div className="fullscreen-note-dialog">
+                <div className="fullscreen-note-header">
+                  <strong>Note</strong>
+                  <span>{formatTime(Math.min(noteWindow.start, noteWindow.end))} - {formatTime(Math.max(noteWindow.start, noteWindow.end))}</span>
+                </div>
+                <textarea
+                  ref={noteTextareaRef}
+                  value={noteDraft}
+                  onChange={event => setNoteDraft(event.target.value)}
+                  placeholder="Type note..."
+                  rows={5}
+                />
+                <div className="fullscreen-note-actions">
+                  <button type="button" className="custom-video-btn" onClick={() => setNoteWindow(null)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="custom-video-btn primary"
+                    onClick={handleSaveInlineNote}
+                    disabled={!noteDraft.trim()}
+                  >
+                    Save note
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
@@ -470,6 +764,18 @@ export default function PlayerPage() {
             ) : null}
           </div>
         )}
+
+        {clips[activeClipIndex]?.notes?.length ? (
+          <div className="current-clip-summary current-clip-notes">
+            <strong>Clip {activeClipIndex + 1} notes:</strong>
+            {clips[activeClipIndex].notes?.map(note => (
+              <p key={note.id}>
+                <span>{formatTime(note.startTime)} - {formatTime(note.endTime)}</span>
+                {note.text}
+              </p>
+            ))}
+          </div>
+        ) : null}
 
         {currentTranscript.length > 0 && (
           <div className="current-clip-transcript">
