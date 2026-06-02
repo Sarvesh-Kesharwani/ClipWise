@@ -73,6 +73,16 @@ function sumRanges(ranges: TimeRange[]) {
   return ranges.reduce((total, range) => total + Math.max(0, range.end - range.start), 0);
 }
 
+function timeToRemainingOffset(time: number, ranges: TimeRange[]) {
+  let offset = 0;
+  for (const range of ranges) {
+    if (time <= range.start) return offset;
+    if (time <= range.end) return offset + (time - range.start);
+    offset += range.end - range.start;
+  }
+  return offset;
+}
+
 export default function PlayerPage() {
   const { instanceId } = useParams<{ instanceId: string }>();
   const navigate = useNavigate();
@@ -130,9 +140,12 @@ export default function PlayerPage() {
     [duration, watchedNoteRanges],
   );
   const remainingDuration = useMemo(() => sumRanges(remainingRanges), [remainingRanges]);
-  const remainingPlayheadPct = remainingDuration > 0
-    ? Math.max(0, Math.min(100, (currentTime / duration) * 100))
-    : 100;
+  const hideWatchedRanges = !showWatchedRanges;
+  const remainingPlayheadPct = showWatchedRanges
+    ? (duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0)
+    : (remainingDuration > 0
+      ? Math.max(0, Math.min(100, (timeToRemainingOffset(currentTime, remainingRanges) / remainingDuration) * 100))
+      : 100);
 
   function needsSummary(clip: Clip | undefined): clip is Clip {
     return Boolean(clip && clip.watchCount > 0 && !clip.summary.trim());
@@ -179,6 +192,12 @@ export default function PlayerPage() {
       return;
     }
     void fullscreenHostRef.current?.requestFullscreen();
+  }
+
+  function handleVideoShellClick(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target;
+    if (target instanceof HTMLElement && target.closest('.custom-video-controls, .fullscreen-note-overlay')) return;
+    togglePlayback();
   }
 
   function openInlineNote() {
@@ -392,6 +411,14 @@ export default function PlayerPage() {
     // Skip stale time updates that arrive during a pending seek
     if (seekingRef.current) return;
 
+    if (hideWatchedRanges) {
+      const watchedRange = watchedNoteRanges.find(range => time >= range.start && time < range.end);
+      if (watchedRange) {
+        seekToTime(watchedRange.end + 0.25);
+        return;
+      }
+    }
+
     if (!clips.length || !instance) {
       setCurrentTime(time);
       setClipWatchProgress(0);
@@ -598,6 +625,7 @@ export default function PlayerPage() {
         <div
           ref={fullscreenHostRef}
           className={`player-video-container custom-video-shell ${isFullscreen ? 'is-fullscreen' : ''}`}
+          onClick={handleVideoShellClick}
         >
           {useFilePlayer ? (
             <LocalPlayer
@@ -685,8 +713,12 @@ export default function PlayerPage() {
                     key={`remaining-${range.start}-${range.end}`}
                     className="remaining-progress-segment"
                     style={{
-                      left: `${duration > 0 ? (range.start / duration) * 100 : 0}%`,
-                      width: `${duration > 0 ? ((range.end - range.start) / duration) * 100 : 0}%`,
+                      left: `${showWatchedRanges
+                        ? (duration > 0 ? (range.start / duration) * 100 : 0)
+                        : (remainingDuration > 0 ? (timeToRemainingOffset(range.start, remainingRanges) / remainingDuration) * 100 : 0)}%`,
+                      width: `${showWatchedRanges
+                        ? (duration > 0 ? ((range.end - range.start) / duration) * 100 : 0)
+                        : (remainingDuration > 0 ? ((range.end - range.start) / remainingDuration) * 100 : 0)}%`,
                     }}
                     role="button"
                     tabIndex={0}
