@@ -10,7 +10,7 @@ import MobileNav from '../components/MobileNav';
 import type { Clip, ClipNote, PlayerRef } from '../types';
 import { WatchTracker } from '../utils/watchTracker';
 import { getVideoFile } from '../utils/videoDb';
-import { formatTime, generateId } from '../utils/helpers';
+import { currentTimestamp, formatTime, generateId } from '../utils/helpers';
 import { fetchYouLearnTranscript } from '../utils/youlearn';
 import { extractYouTubeId, fetchYouTubeTranscript } from '../utils/youtube';
 import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
@@ -185,6 +185,19 @@ export default function PlayerPage() {
     playerRef.current?.play();
   }
 
+  function jumpToPlayableTime(time: number) {
+    const playableTime = getPlayableSeekTime(time);
+    if (playableTime === null) return false;
+
+    seekingRef.current = true;
+    noteSegmentStartRef.current = playableTime;
+    setCurrentTime(playableTime);
+    playerRef.current?.seek(playableTime);
+    playerRef.current?.play();
+    window.setTimeout(() => { seekingRef.current = false; }, 500);
+    return true;
+  }
+
   function toggleFullscreen() {
     const fullscreenElement = document.fullscreenElement;
     if (fullscreenElement) {
@@ -227,7 +240,7 @@ export default function PlayerPage() {
       startTime: start,
       endTime: end > start ? end : Math.min(duration, start + 0.5),
       text: noteText,
-      createdAt: Date.now(),
+      createdAt: currentTimestamp(),
     };
 
     updateClip(instance.id, clip.index, {
@@ -411,10 +424,10 @@ export default function PlayerPage() {
     // Skip stale time updates that arrive during a pending seek
     if (seekingRef.current) return;
 
-    if (hideWatchedRanges) {
+    if (hideWatchedRanges && duration > 0 && watchedNoteRanges.length > 0 && remainingRanges.length > 0) {
       const watchedRange = watchedNoteRanges.find(range => time >= range.start && time < range.end);
       if (watchedRange) {
-        seekToTime(watchedRange.end + 0.25);
+        jumpToPlayableTime(watchedRange.end + 0.25);
         return;
       }
     }
