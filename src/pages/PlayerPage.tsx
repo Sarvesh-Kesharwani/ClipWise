@@ -73,26 +73,6 @@ function sumRanges(ranges: TimeRange[]) {
   return ranges.reduce((total, range) => total + Math.max(0, range.end - range.start), 0);
 }
 
-function timeToRemainingOffset(time: number, ranges: TimeRange[]) {
-  let offset = 0;
-  for (const range of ranges) {
-    if (time <= range.start) return offset;
-    if (time <= range.end) return offset + (time - range.start);
-    offset += range.end - range.start;
-  }
-  return offset;
-}
-
-function remainingOffsetToTime(offset: number, ranges: TimeRange[]) {
-  let cursor = Math.max(0, offset);
-  for (const range of ranges) {
-    const length = range.end - range.start;
-    if (cursor <= length) return range.start + cursor;
-    cursor -= length;
-  }
-  return ranges[ranges.length - 1]?.end ?? 0;
-}
-
 export default function PlayerPage() {
   const { instanceId } = useParams<{ instanceId: string }>();
   const navigate = useNavigate();
@@ -127,6 +107,7 @@ export default function PlayerPage() {
   const [loading, setLoading] = useState(true);
   const [clipWatchProgress, setClipWatchProgress] = useState(0);
   const [celebration, setCelebration] = useState<{ key: number; clipNumber: number } | null>(null);
+  const [showWatchedRanges, setShowWatchedRanges] = useState(false);
 
   const trackersRef = useRef(new Map<number, WatchTracker>());
   const countedRef = useRef(new Set<number>());
@@ -134,6 +115,7 @@ export default function PlayerPage() {
   const seekingRef = useRef(false);
   const celebrationTimerRef = useRef<number | null>(null);
   const summaryTimerRef = useRef<number | null>(null);
+  const celebrationKeyRef = useRef(0);
 
   const clips = useMemo(() => instance?.clips || [], [instance?.clips]);
   const watchedNoteRanges = useMemo(
@@ -148,9 +130,8 @@ export default function PlayerPage() {
     [duration, watchedNoteRanges],
   );
   const remainingDuration = useMemo(() => sumRanges(remainingRanges), [remainingRanges]);
-  const totalRemainingWidthPct = duration > 0 ? Math.max(0, Math.min(100, (remainingDuration / duration) * 100)) : 100;
   const remainingPlayheadPct = remainingDuration > 0
-    ? Math.max(0, Math.min(100, (timeToRemainingOffset(currentTime, remainingRanges) / remainingDuration) * 100))
+    ? Math.max(0, Math.min(100, (currentTime / duration) * 100))
     : 100;
 
   function needsSummary(clip: Clip | undefined): clip is Clip {
@@ -239,11 +220,10 @@ export default function PlayerPage() {
     setNoteDraft('');
   }
 
-  function handleRemainingProgressClick(event: ReactMouseEvent<HTMLDivElement>) {
-    if (remainingDuration <= 0) return;
+  function handleRemainingProgressClick(event: ReactMouseEvent<HTMLDivElement>, range: TimeRange) {
     const rect = event.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
-    seekToTime(remainingOffsetToTime(pct * remainingDuration, remainingRanges));
+    seekToTime(range.start + pct * (range.end - range.start));
   }
 
   function triggerCelebration(clipIndex: number) {
@@ -251,7 +231,8 @@ export default function PlayerPage() {
       window.clearTimeout(celebrationTimerRef.current);
     }
 
-    setCelebration({ key: Date.now(), clipNumber: clipIndex + 1 });
+    celebrationKeyRef.current += 1;
+    setCelebration({ key: celebrationKeyRef.current, clipNumber: clipIndex + 1 });
     celebrationTimerRef.current = window.setTimeout(() => {
       setCelebration(null);
       celebrationTimerRef.current = null;
@@ -391,7 +372,12 @@ export default function PlayerPage() {
         || target instanceof HTMLSelectElement
         || (target instanceof HTMLElement && target.isContentEditable);
 
-      if (isTyping || showSummary) return;
+      if (isTyping || showSummary || noteWindow) return;
+      if ((event.code === 'Space' || event.key === ' ') && document.fullscreenElement === fullscreenHostRef.current) {
+        event.preventDefault();
+        if (!event.repeat) togglePlayback();
+        return;
+      }
       if (event.key.toLowerCase() === 'n') {
         event.preventDefault();
         openInlineNote();
@@ -463,9 +449,21 @@ export default function PlayerPage() {
     setDuration(dur);
   }
 
+  function getPlayableSeekTime(time: number): number | null {
+    const clampedTime = clampTime(time, duration);
+    const currentRange = remainingRanges.find(range => clampedTime >= range.start && clampedTime < range.end);
+    if (currentRange) return clampedTime;
+
+    const nextRange = remainingRanges.find(range => range.start > clampedTime);
+    return nextRange?.start ?? null;
+  }
+
   function seekToTime(time: number) {
+    const playableTime = getPlayableSeekTime(time);
+    if (playableTime === null) return;
+
     // Reset tracker state for the new position so tracking starts fresh
-    const newClipIdx = getClipIndexForTime(time);
+    const newClipIdx = getClipIndexForTime(playableTime);
     if (requireSummaryBeforeLeaving(activeClipIndex, newClipIdx)) return;
 
     if (newClipIdx !== prevClipRef.current) {
@@ -483,10 +481,10 @@ export default function PlayerPage() {
 
     // Suppress stale time updates while seeking
     seekingRef.current = true;
-    noteSegmentStartRef.current = time;
-    setCurrentTime(time);
+    noteSegmentStartRef.current = playableTime;
+    setCurrentTime(playableTime);
 
-    playerRef.current?.seek(time);
+    playerRef.current?.seek(playableTime);
     playerRef.current?.play();
 
     // Allow time updates again after seek settles
@@ -648,6 +646,15 @@ export default function PlayerPage() {
               <button
                 type="button"
                 className="custom-video-btn"
+                onClick={() => setShowWatchedRanges(value => !value)}
+                aria-pressed={showWatchedRanges}
+                aria-label={showWatchedRanges ? 'Hide watched clips in progress bar' : 'Show watched clips in progress bar'}
+              >
+                {showWatchedRanges ? 'Hide watched' : 'Show watched'}
+              </button>
+              <button
+                type="button"
+                className="custom-video-btn"
                 onClick={toggleFullscreen}
                 aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
               >
@@ -658,19 +665,39 @@ export default function PlayerPage() {
             <div className="remaining-progress-rail" aria-label="Remaining video progress">
               <div
                 className={`remaining-progress-track ${remainingDuration <= 0 ? 'empty' : ''}`}
-                style={{ width: `${totalRemainingWidthPct}%` }}
-                role="slider"
-                aria-valuemin={0}
-                aria-valuemax={Math.round(remainingDuration)}
-                aria-valuenow={Math.round(timeToRemainingOffset(currentTime, remainingRanges))}
-                tabIndex={0}
-                onClick={handleRemainingProgressClick}
+                role="group"
+                aria-label={`Playable progress bar with ${formatTime(remainingDuration)} unwatched`}
               >
+                {showWatchedRanges && watchedNoteRanges.map(range => (
+                  <div
+                    key={`watched-${range.start}-${range.end}`}
+                    className="remaining-progress-segment watched"
+                    style={{
+                      left: `${duration > 0 ? (range.start / duration) * 100 : 0}%`,
+                      width: `${duration > 0 ? ((range.end - range.start) / duration) * 100 : 0}%`,
+                    }}
+                    title={`Watched ${formatTime(range.start)} - ${formatTime(range.end)}`}
+                    aria-hidden="true"
+                  />
+                ))}
                 {remainingRanges.map(range => (
                   <div
-                    key={`${range.start}-${range.end}`}
+                    key={`remaining-${range.start}-${range.end}`}
                     className="remaining-progress-segment"
-                    style={{ width: `${(range.end - range.start) / Math.max(1, remainingDuration) * 100}%` }}
+                    style={{
+                      left: `${duration > 0 ? (range.start / duration) * 100 : 0}%`,
+                      width: `${duration > 0 ? ((range.end - range.start) / duration) * 100 : 0}%`,
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Play unwatched range from ${formatTime(range.start)} to ${formatTime(range.end)}`}
+                    onClick={event => handleRemainingProgressClick(event, range)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        seekToTime(range.start);
+                      }
+                    }}
                   />
                 ))}
                 <div className="remaining-progress-playhead" style={{ left: `${remainingPlayheadPct}%` }} />
