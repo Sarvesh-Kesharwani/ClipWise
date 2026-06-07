@@ -119,6 +119,7 @@ export default function PlayerPage() {
   const [clipWatchProgress, setClipWatchProgress] = useState(0);
   const [celebration, setCelebration] = useState<{ key: number; clipNumber: number } | null>(null);
   const [showWatchedRanges, setShowWatchedRanges] = useState(false);
+  const [skipNotedRanges, setSkipNotedRanges] = useState(false);
 
   const trackersRef = useRef(new Map<number, WatchTracker>());
   const countedRef = useRef(new Set<number>());
@@ -142,7 +143,6 @@ export default function PlayerPage() {
     [duration, watchedNoteRanges],
   );
   const remainingDuration = useMemo(() => sumRanges(remainingRanges), [remainingRanges]);
-  const hideWatchedRanges = !showWatchedRanges;
   const remainingPlayheadPct = showWatchedRanges
     ? (duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0)
     : (remainingDuration > 0
@@ -459,12 +459,23 @@ export default function PlayerPage() {
         || (target instanceof HTMLElement && target.isContentEditable);
 
       if (isTyping || showSummary || noteWindow) return;
+      const key = event.key.toLowerCase();
+      if (key === 'escape' && document.fullscreenElement === fullscreenHostRef.current) {
+        event.preventDefault();
+        void document.exitFullscreen();
+        return;
+      }
+      if (key === 'f') {
+        event.preventDefault();
+        if (!event.repeat) toggleFullscreen();
+        return;
+      }
       if ((event.code === 'Space' || event.key === ' ') && document.fullscreenElement === fullscreenHostRef.current) {
         event.preventDefault();
         if (!event.repeat) togglePlayback();
         return;
       }
-      if (event.key.toLowerCase() === 'n') {
+      if (key === 'n') {
         event.preventDefault();
         openInlineNote();
       }
@@ -486,10 +497,10 @@ export default function PlayerPage() {
       noteReviewRangeRef.current = null;
     }
 
-    if (!isReviewingNote && hideWatchedRanges && duration > 0 && watchedNoteRanges.length > 0 && remainingRanges.length > 0) {
+    if (!isReviewingNote && skipNotedRanges && duration > 0 && watchedNoteRanges.length > 0 && remainingRanges.length > 0) {
       const watchedRange = watchedNoteRanges.find(range => time >= range.start && time < range.end);
       if (watchedRange) {
-        jumpToPlayableTime(watchedRange.end + 0.25);
+        jumpToPlayableTime(watchedRange.end);
         return;
       }
     }
@@ -769,6 +780,15 @@ export default function PlayerPage() {
                 aria-label={showWatchedRanges ? 'Hide watched clips in progress bar' : 'Show watched clips in progress bar'}
               >
                 {showWatchedRanges ? 'Hide watched' : 'Show watched'}
+              </button>
+              <button
+                type="button"
+                className={`custom-video-btn ${skipNotedRanges ? 'primary' : ''}`}
+                onClick={() => setSkipNotedRanges(value => !value)}
+                aria-pressed={skipNotedRanges}
+                aria-label={skipNotedRanges ? 'Disable jumping over noted ranges' : 'Enable jumping over noted ranges'}
+              >
+                {skipNotedRanges ? 'Jumping on' : 'Jump notes'}
               </button>
               <button
                 type="button"
