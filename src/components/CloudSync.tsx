@@ -5,7 +5,7 @@ interface Props {
 }
 
 export default function CloudSync({ compact }: Props) {
-  const { cloudSync, syncToCloud, loadFromCloud } = useApp();
+  const { cloudSync, syncToCloud, loadFromCloud, restoreFromLegacyDrive } = useApp();
   const isBusy = cloudSync.status === 'syncing'
     || cloudSync.status === 'loading'
     || cloudSync.status === 'restoring';
@@ -31,6 +31,13 @@ export default function CloudSync({ compact }: Props) {
             disabled={isBusy || !cloudSync.hasPendingChanges}
           >
             {cloudSync.status === 'syncing' ? 'Saving...' : cloudSync.hasPendingChanges ? 'Save' : 'Saved'}
+          </button>
+          <button
+            className="cw-btn cw-btn-secondary"
+            onClick={() => void restoreFromLegacyDrive()}
+            disabled={isBusy}
+          >
+            Restore Drive
           </button>
         </div>
       </div>
@@ -58,6 +65,13 @@ export default function CloudSync({ compact }: Props) {
           disabled={isBusy || !cloudSync.hasPendingChanges}
         >
           {cloudSync.status === 'syncing' ? 'Saving...' : cloudSync.hasPendingChanges ? 'Save to Supabase' : 'Saved'}
+        </button>
+        <button
+          className="cw-btn cw-btn-secondary"
+          onClick={() => void restoreFromLegacyDrive()}
+          disabled={isBusy}
+        >
+          Restore legacy Drive backup
         </button>
       </div>
     </div>

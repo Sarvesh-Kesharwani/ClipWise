@@ -61,6 +61,7 @@ export interface AppContextType {
   signOut: () => Promise<void>;
   syncToCloud: () => Promise<void>;
   loadFromCloud: (options?: { force?: boolean }) => Promise<void>;
+  restoreFromLegacyDrive: () => Promise<void>;
 }
 
 export const AppContext = createContext<AppContextType | null>(null);

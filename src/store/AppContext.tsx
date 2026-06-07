@@ -26,6 +26,11 @@ import {
   logoutPasscodeSession,
   saveToCloud,
 } from '../utils/supabaseSync';
+import {
+  getGoogleClientId,
+  loadBestLegacyDrivePayload,
+  requestLegacyDriveToken,
+} from '../utils/legacyGoogleDriveSync';
 
 function createDefaultFolder(): Folder {
   return {
@@ -128,6 +133,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const driveRestoreReadyRef = React.useRef(true);
   const autoRestoreStartedRef = React.useRef(false);
   const shouldPersistLocalRef = React.useRef(hasStoredLocalData);
+  const suppressAutoSyncRef = React.useRef(false);
 
   useEffect(() => {
     dataRef.current = data;
@@ -466,8 +472,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Wipe all local data (app data + IndexedDB videos + cloud session).
   // Called on explicit sign-out and when a session expires.
   const clearLocalData = useCallback(() => {
+    suppressAutoSyncRef.current = true;
     driveRestoreReadyRef.current = true;
-    shouldPersistLocalRef.current = true;
+    shouldPersistLocalRef.current = false;
     clearAppData();
     void clearAllVideoFiles();
     const emptyData: AppData = {
@@ -617,6 +624,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [hasStoredLocalData, persistCloudSession]);
 
+  const restoreFromLegacyDrive = useCallback(async () => {
+    setCloudSync(prev => ({
+      ...prev,
+      status: 'signing-in',
+      message: 'Opening Google Drive legacy backup picker...',
+    }));
+
+    try {
+      const token = await requestLegacyDriveToken(getGoogleClientId());
+      setCloudSync(prev => ({
+        ...prev,
+        status: 'loading',
+        message: 'Searching old Google Drive backups...',
+      }));
+
+      const payload = await loadBestLegacyDrivePayload(token);
+      if (!payload) {
+        throw new Error('No non-empty legacy Google Drive backup found.');
+      }
+
+      const migrated = migrateAppData(payload.data);
+      shouldPersistLocalRef.current = true;
+      setData(migrated);
+      setDataUpdatedAt(payload.savedAt);
+
+      const saved = await saveToCloud(createCloudPayload(migrated, payload.savedAt));
+      syncFileIdRef.current = 'primary';
+      lastCloudSavedAtRef.current = saved.savedAt;
+      const syncedAt = Date.now();
+      persistCloudSession({
+        fileId: 'primary',
+        lastSyncedAt: syncedAt,
+        lastSavedDataAt: saved.savedAt,
+      });
+      setCloudSync(prev => ({
+        ...prev,
+        isSignedIn: true,
+        hasPendingChanges: false,
+        requiresDriveRestore: false,
+        fileId: 'primary',
+        status: 'idle',
+        message: `Restored ${migrated.videos.length} videos from Google Drive and saved to Supabase.`,
+        lastSyncedAt: syncedAt,
+      }));
+    } catch (error) {
+      setCloudSync(prev => ({
+        ...prev,
+        status: 'error',
+        message: error instanceof Error ? error.message : 'Google Drive restore failed.',
+      }));
+    }
+  }, [persistCloudSession]);
+
   const signOut = useCallback(async () => {
     clearCloudSession();
     clearLocalData();
@@ -648,6 +708,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [cloudSync.requiresDriveRestore, dataUpdatedAt]);
 
   useEffect(() => {
+    if (suppressAutoSyncRef.current) return;
     if (cloudSync.requiresDriveRestore || !driveRestoreReadyRef.current) return;
     if (lastCloudSavedAtRef.current === dataUpdatedAt) return;
 
@@ -692,6 +753,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       signOut,
       syncToCloud,
       loadFromCloud,
+      restoreFromLegacyDrive,
     }}>
       {children}
       {showDriveRestoreOverlay && (

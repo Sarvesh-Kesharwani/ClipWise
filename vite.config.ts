@@ -1,4 +1,4 @@
-import { defineConfig, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import authHandler from './api/auth'
 import syncHandler from './api/sync'
@@ -182,6 +182,13 @@ function normalizeDuration(value: number | undefined): number {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  plugins: [react(), youLearnDevApi()],
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '');
+  for (const [key, value] of Object.entries(env)) {
+    process.env[key] ??= value;
+  }
+
+  return {
+    plugins: [react(), youLearnDevApi()],
+  };
 })

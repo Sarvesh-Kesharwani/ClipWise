@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, type MouseEvent as ReactMouseEvent } from 'react';
+import { useState, useEffect, useRef, useMemo, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../store/useApp';
 import LocalPlayer from '../components/LocalPlayer';
@@ -25,6 +25,7 @@ interface TimeRange {
 
 interface NoteDraftWindow extends TimeRange {
   clipIndex: number;
+  noteId?: string;
 }
 
 function clampTime(value: number, duration: number) {
@@ -123,6 +124,7 @@ export default function PlayerPage() {
   const countedRef = useRef(new Set<number>());
   const prevClipRef = useRef(-1);
   const seekingRef = useRef(false);
+  const noteReviewRangeRef = useRef<TimeRange | null>(null);
   const celebrationTimerRef = useRef<number | null>(null);
   const summaryTimerRef = useRef<number | null>(null);
   const celebrationKeyRef = useRef(0);
@@ -225,6 +227,24 @@ export default function PlayerPage() {
     setNoteDraft('');
   }
 
+  function openEditInlineNote(clipIndex: number, note: ClipNote) {
+    if (!instance || noteWindow) return;
+
+    playerRef.current?.pause();
+    setNoteWindow({
+      start: note.startTime,
+      end: note.endTime,
+      clipIndex,
+      noteId: note.id,
+    });
+    setNoteDraft(note.text);
+  }
+
+  function closeInlineNote() {
+    setNoteWindow(null);
+    setNoteDraft('');
+  }
+
   function handleSaveInlineNote() {
     if (!instance || !noteWindow) return;
     const noteText = noteDraft.trim();
@@ -235,10 +255,25 @@ export default function PlayerPage() {
 
     const start = clampTime(Math.min(noteWindow.start, noteWindow.end), duration);
     const end = clampTime(Math.max(noteWindow.start, noteWindow.end), duration);
+    const endTime = end > start ? end : Math.min(duration, start + 0.5);
+
+    if (noteWindow.noteId) {
+      updateClip(instance.id, clip.index, {
+        notes: (clip.notes ?? []).map(note =>
+          note.id === noteWindow.noteId
+            ? { ...note, startTime: start, endTime, text: noteText }
+            : note
+        ),
+      });
+      noteSegmentStartRef.current = endTime;
+      closeInlineNote();
+      return;
+    }
+
     const note: ClipNote = {
       id: generateId(),
       startTime: start,
-      endTime: end > start ? end : Math.min(duration, start + 0.5),
+      endTime,
       text: noteText,
       createdAt: currentTimestamp(),
     };
@@ -248,8 +283,27 @@ export default function PlayerPage() {
     });
     recordClipWatched(instance.videoId);
     noteSegmentStartRef.current = note.endTime;
-    setNoteWindow(null);
-    setNoteDraft('');
+    closeInlineNote();
+  }
+
+  function handleInlineNoteKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if ((event.ctrlKey || event.metaKey || event.shiftKey) && event.key === 'Enter') {
+      event.preventDefault();
+      handleSaveInlineNote();
+    }
+  }
+
+  function handleDeleteInlineNote(clipIndex: number, noteId: string) {
+    if (!instance) return;
+
+    const clip = clips[clipIndex];
+    if (!clip) return;
+
+    updateClip(instance.id, clip.index, {
+      notes: (clip.notes ?? []).filter(note => note.id !== noteId),
+    });
+
+    if (noteWindow?.noteId === noteId) closeInlineNote();
   }
 
   function handleRemainingProgressClick(event: ReactMouseEvent<HTMLDivElement>, range: TimeRange) {
@@ -424,7 +478,15 @@ export default function PlayerPage() {
     // Skip stale time updates that arrive during a pending seek
     if (seekingRef.current) return;
 
-    if (hideWatchedRanges && duration > 0 && watchedNoteRanges.length > 0 && remainingRanges.length > 0) {
+    const noteReviewRange = noteReviewRangeRef.current;
+    const isReviewingNote = Boolean(
+      noteReviewRange && time >= noteReviewRange.start && time < noteReviewRange.end,
+    );
+    if (noteReviewRange && (time < noteReviewRange.start - 0.25 || time >= noteReviewRange.end)) {
+      noteReviewRangeRef.current = null;
+    }
+
+    if (!isReviewingNote && hideWatchedRanges && duration > 0 && watchedNoteRanges.length > 0 && remainingRanges.length > 0) {
       const watchedRange = watchedNoteRanges.find(range => time >= range.start && time < range.end);
       if (watchedRange) {
         jumpToPlayableTime(watchedRange.end + 0.25);
@@ -502,9 +564,14 @@ export default function PlayerPage() {
     const playableTime = getPlayableSeekTime(time);
     if (playableTime === null) return;
 
-    // Reset tracker state for the new position so tracking starts fresh
-    const newClipIdx = getClipIndexForTime(playableTime);
-    if (requireSummaryBeforeLeaving(activeClipIndex, newClipIdx)) return;
+    noteReviewRangeRef.current = null;
+    seekToResolvedTime(playableTime);
+  }
+
+  function seekToResolvedTime(time: number) {
+    const seekTime = clampTime(time, duration);
+    const newClipIdx = getClipIndexForTime(seekTime);
+    if (requireSummaryBeforeLeaving(activeClipIndex, newClipIdx)) return false;
 
     if (newClipIdx !== prevClipRef.current) {
       if (prevClipRef.current >= 0) {
@@ -521,14 +588,24 @@ export default function PlayerPage() {
 
     // Suppress stale time updates while seeking
     seekingRef.current = true;
-    noteSegmentStartRef.current = playableTime;
-    setCurrentTime(playableTime);
+    noteSegmentStartRef.current = seekTime;
+    setCurrentTime(seekTime);
 
-    playerRef.current?.seek(playableTime);
+    playerRef.current?.seek(seekTime);
     playerRef.current?.play();
 
     // Allow time updates again after seek settles
     setTimeout(() => { seekingRef.current = false; }, 500);
+    return true;
+  }
+
+  function handleSeekToNote(note: ClipNote) {
+    const start = clampTime(note.startTime, duration);
+    const end = clampTime(Math.max(note.startTime, note.endTime), duration);
+    const noteEnd = end > start ? end : Math.min(duration, start + 0.5);
+
+    const noteRange = { start, end: noteEnd };
+    noteReviewRangeRef.current = seekToResolvedTime(start) ? noteRange : null;
   }
 
   function handleSeekToClip(index: number) {
@@ -754,18 +831,19 @@ export default function PlayerPage() {
             <div className="fullscreen-note-overlay" role="dialog" aria-modal="true" aria-label="Save timestamp note">
               <div className="fullscreen-note-dialog">
                 <div className="fullscreen-note-header">
-                  <strong>Note</strong>
+                  <strong>{noteWindow.noteId ? 'Edit note' : 'Note'}</strong>
                   <span>{formatTime(Math.min(noteWindow.start, noteWindow.end))} - {formatTime(Math.max(noteWindow.start, noteWindow.end))}</span>
                 </div>
                 <textarea
                   ref={noteTextareaRef}
                   value={noteDraft}
                   onChange={event => setNoteDraft(event.target.value)}
+                  onKeyDown={handleInlineNoteKeyDown}
                   placeholder="Type note..."
                   rows={5}
                 />
                 <div className="fullscreen-note-actions">
-                  <button type="button" className="custom-video-btn" onClick={() => setNoteWindow(null)}>
+                  <button type="button" className="custom-video-btn" onClick={closeInlineNote}>
                     Cancel
                   </button>
                   <button
@@ -774,7 +852,7 @@ export default function PlayerPage() {
                     onClick={handleSaveInlineNote}
                     disabled={!noteDraft.trim()}
                   >
-                    Save note
+                    {noteWindow.noteId ? 'Save changes' : 'Save note'}
                   </button>
                 </div>
               </div>
@@ -841,10 +919,33 @@ export default function PlayerPage() {
           <div className="current-clip-summary current-clip-notes">
             <strong>Clip {activeClipIndex + 1} notes:</strong>
             {clips[activeClipIndex].notes?.map(note => (
-              <p key={note.id}>
-                <span>{formatTime(note.startTime)} - {formatTime(note.endTime)}</span>
-                {note.text}
-              </p>
+              <div className="current-clip-note-item" key={note.id}>
+                <button
+                  type="button"
+                  className="current-clip-note-jump"
+                  onClick={() => handleSeekToNote(note)}
+                  aria-label={`Play note from ${formatTime(note.startTime)}`}
+                >
+                  <span className="current-clip-note-time">{formatTime(note.startTime)} - {formatTime(note.endTime)}</span>
+                  <p>{note.text}</p>
+                </button>
+                <div className="current-clip-note-actions">
+                  <button
+                    type="button"
+                    className="current-clip-note-edit"
+                    onClick={() => openEditInlineNote(activeClipIndex, note)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="current-clip-note-delete"
+                    onClick={() => handleDeleteInlineNote(activeClipIndex, note.id)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         ) : null}

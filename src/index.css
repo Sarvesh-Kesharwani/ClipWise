@@ -2582,17 +2582,77 @@ input, textarea {
   gap: 8px;
 }
 
-.current-clip-notes p {
-  margin: 0;
+.current-clip-note-item {
   display: grid;
-  gap: 3px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
 }
 
-.current-clip-notes span {
+.current-clip-notes p {
+  margin: 0;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.current-clip-note-jump {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.current-clip-note-jump:hover p,
+.current-clip-note-jump:focus-visible p {
+  color: var(--green-dark);
+}
+
+.current-clip-note-jump:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.current-clip-note-time {
   color: var(--green-dark);
   font-size: 12px;
   font-weight: 900;
   font-variant-numeric: tabular-nums;
+}
+
+.current-clip-note-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.current-clip-note-edit,
+.current-clip-note-delete {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 9px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.current-clip-note-edit:hover,
+.current-clip-note-edit:focus-visible {
+  border-color: var(--green);
+  color: var(--green-dark);
+}
+
+.current-clip-note-delete:hover,
+.current-clip-note-delete:focus-visible {
+  border-color: #ef4444;
+  color: #b91c1c;
 }
 
 /* ===== Clip Celebration ===== */
