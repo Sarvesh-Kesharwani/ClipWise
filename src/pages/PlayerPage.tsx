@@ -125,8 +125,10 @@ export default function PlayerPage() {
   const countedRef = useRef(new Set<number>());
   const prevClipRef = useRef(-1);
   const seekingRef = useRef(false);
+  const playIntentRef = useRef(false);
   const noteReviewRangeRef = useRef<TimeRange | null>(null);
   const pendingSkipTargetRef = useRef<number | null>(null);
+  const skipResumeTimerRef = useRef<number | null>(null);
   const celebrationTimerRef = useRef<number | null>(null);
   const summaryTimerRef = useRef<number | null>(null);
   const celebrationKeyRef = useRef(0);
@@ -173,11 +175,23 @@ export default function PlayerPage() {
     if (noteSegmentStartRef.current === null) {
       noteSegmentStartRef.current = currentTime;
     }
+    playIntentRef.current = true;
     setIsPlaying(true);
+  }
+
+  function handlePlayerPause() {
+    playIntentRef.current = false;
+    setIsPlaying(false);
+  }
+
+  function handlePlayerEnded() {
+    playIntentRef.current = false;
+    setIsPlaying(false);
   }
 
   function togglePlayback() {
     if (isPlaying) {
+      playIntentRef.current = false;
       playerRef.current?.pause();
       return;
     }
@@ -185,6 +199,7 @@ export default function PlayerPage() {
     if (noteSegmentStartRef.current === null) {
       noteSegmentStartRef.current = currentTime;
     }
+    playIntentRef.current = true;
     playerRef.current?.play();
   }
 
@@ -197,6 +212,16 @@ export default function PlayerPage() {
     noteSegmentStartRef.current = playableTime;
     setCurrentTime(playableTime);
     playerRef.current?.seek(playableTime);
+    playerRef.current?.play();
+    if (skipResumeTimerRef.current !== null) {
+      window.clearTimeout(skipResumeTimerRef.current);
+    }
+    skipResumeTimerRef.current = window.setTimeout(() => {
+      skipResumeTimerRef.current = null;
+      if (playIntentRef.current && pendingSkipTargetRef.current !== null) {
+        playerRef.current?.play();
+      }
+    }, 350);
     window.setTimeout(() => { seekingRef.current = false; }, 500);
     return true;
   }
@@ -433,6 +458,9 @@ export default function PlayerPage() {
       }
       if (summaryTimerRef.current !== null) {
         window.clearTimeout(summaryTimerRef.current);
+      }
+      if (skipResumeTimerRef.current !== null) {
+        window.clearTimeout(skipResumeTimerRef.current);
       }
     };
   }, []);
@@ -743,9 +771,9 @@ export default function PlayerPage() {
               src={videoSrc}
               onTimeUpdate={handleTimeUpdate}
               onPlay={handlePlayerPlay}
-              onPause={() => setIsPlaying(false)}
+              onPause={handlePlayerPause}
               onReady={handleReady}
-              onEnded={() => setIsPlaying(false)}
+              onEnded={handlePlayerEnded}
             />
           ) : (
             <YouTubePlayer
@@ -753,9 +781,9 @@ export default function PlayerPage() {
               videoId={playerYouTubeId!}
               onTimeUpdate={handleTimeUpdate}
               onPlay={handlePlayerPlay}
-              onPause={() => setIsPlaying(false)}
+              onPause={handlePlayerPause}
               onReady={handleReady}
-              onEnded={() => setIsPlaying(false)}
+              onEnded={handlePlayerEnded}
             />
           )}
 
