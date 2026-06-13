@@ -126,6 +126,7 @@ export default function PlayerPage() {
   const prevClipRef = useRef(-1);
   const seekingRef = useRef(false);
   const noteReviewRangeRef = useRef<TimeRange | null>(null);
+  const pendingSkipTargetRef = useRef<number | null>(null);
   const celebrationTimerRef = useRef<number | null>(null);
   const summaryTimerRef = useRef<number | null>(null);
   const celebrationKeyRef = useRef(0);
@@ -191,11 +192,11 @@ export default function PlayerPage() {
     const playableTime = getPlayableSeekTime(time);
     if (playableTime === null) return false;
 
+    pendingSkipTargetRef.current = playableTime;
     seekingRef.current = true;
     noteSegmentStartRef.current = playableTime;
     setCurrentTime(playableTime);
     playerRef.current?.seek(playableTime);
-    playerRef.current?.play();
     window.setTimeout(() => { seekingRef.current = false; }, 500);
     return true;
   }
@@ -489,6 +490,12 @@ export default function PlayerPage() {
     // Skip stale time updates that arrive during a pending seek
     if (seekingRef.current) return;
 
+    const pendingSkipTarget = pendingSkipTargetRef.current;
+    const isCompletingSkip = pendingSkipTarget !== null && time < pendingSkipTarget;
+    if (pendingSkipTarget !== null && !isCompletingSkip) {
+      pendingSkipTargetRef.current = null;
+    }
+
     const noteReviewRange = noteReviewRangeRef.current;
     const isReviewingNote = Boolean(
       noteReviewRange && time >= noteReviewRange.start && time < noteReviewRange.end,
@@ -497,7 +504,7 @@ export default function PlayerPage() {
       noteReviewRangeRef.current = null;
     }
 
-    if (!isReviewingNote && skipNotedRanges && duration > 0 && watchedNoteRanges.length > 0 && remainingRanges.length > 0) {
+    if (!isCompletingSkip && !isReviewingNote && skipNotedRanges && duration > 0 && watchedNoteRanges.length > 0 && remainingRanges.length > 0) {
       const watchedRange = watchedNoteRanges.find(range => time >= range.start && time < range.end);
       if (watchedRange) {
         jumpToPlayableTime(watchedRange.end);
@@ -575,6 +582,7 @@ export default function PlayerPage() {
     const playableTime = getPlayableSeekTime(time);
     if (playableTime === null) return;
 
+    pendingSkipTargetRef.current = null;
     noteReviewRangeRef.current = null;
     seekToResolvedTime(playableTime);
   }
@@ -615,6 +623,7 @@ export default function PlayerPage() {
     const end = clampTime(Math.max(note.startTime, note.endTime), duration);
     const noteEnd = end > start ? end : Math.min(duration, start + 0.5);
 
+    pendingSkipTargetRef.current = null;
     const noteRange = { start, end: noteEnd };
     noteReviewRangeRef.current = seekToResolvedTime(start) ? noteRange : null;
   }
