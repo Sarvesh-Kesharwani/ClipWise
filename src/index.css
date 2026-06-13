@@ -2471,17 +2471,26 @@ input, textarea {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16);
 }
 
+.remaining-progress-note-coverage {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  height: 100%;
+  background: linear-gradient(90deg, #facc15, #fde047);
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.42), 0 0 14px rgba(250,204,21,0.52);
+}
+
 .remaining-progress-playhead {
   position: absolute;
-  top: 50%;
-  width: 18px;
-  height: 18px;
-  border: 3px solid #071019;
-  border-radius: 50%;
+  top: 0;
+  z-index: 3;
+  width: 3px;
+  height: 100%;
   background: #fff;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   pointer-events: none;
-  box-shadow: 0 0 0 1px rgba(255,255,255,0.82), 0 0 16px rgba(125,211,252,0.62), 0 3px 10px rgba(0,0,0,0.8);
+  box-shadow: 0 0 0 1px rgba(7,16,25,0.72), 0 0 10px rgba(255,255,255,0.72);
 }
 
 @media (max-width: 760px) {

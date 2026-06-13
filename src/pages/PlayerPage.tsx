@@ -106,6 +106,7 @@ export default function PlayerPage() {
   const noteTextareaRef = useRef<HTMLTextAreaElement>(null);
   const noteSegmentStartRef = useRef<number | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
+  const [noteCoverageStart, setNoteCoverageStart] = useState<number | null>(null);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -151,6 +152,27 @@ export default function PlayerPage() {
     : (remainingDuration > 0
       ? Math.max(0, Math.min(100, (timeToRemainingOffset(currentTime, remainingRanges) / remainingDuration) * 100))
       : 100);
+  const noteCoverageRange = noteCoverageStart !== null && !noteWindow?.noteId
+    ? {
+        start: clampTime(Math.min(noteCoverageStart, currentTime), duration),
+        end: clampTime(Math.max(noteCoverageStart, currentTime), duration),
+      }
+    : null;
+  const noteCoverageLeftPct = noteCoverageRange
+    ? (showWatchedRanges
+        ? (duration > 0 ? (noteCoverageRange.start / duration) * 100 : 0)
+        : (remainingDuration > 0
+            ? (timeToRemainingOffset(noteCoverageRange.start, remainingRanges) / remainingDuration) * 100
+            : 0))
+    : 0;
+  const noteCoverageWidthPct = noteCoverageRange
+    ? (showWatchedRanges
+        ? (duration > 0 ? ((noteCoverageRange.end - noteCoverageRange.start) / duration) * 100 : 0)
+        : (remainingDuration > 0
+            ? ((timeToRemainingOffset(noteCoverageRange.end, remainingRanges)
+                - timeToRemainingOffset(noteCoverageRange.start, remainingRanges)) / remainingDuration) * 100
+            : 0))
+    : 0;
 
   function needsSummary(clip: Clip | undefined): clip is Clip {
     return Boolean(clip && clip.watchCount > 0 && !clip.summary.trim());
@@ -171,9 +193,19 @@ export default function PlayerPage() {
     setShowSummary(true);
   }
 
+  function setNoteCoverageFrom(time: number) {
+    const start = clampTime(time, duration);
+    noteSegmentStartRef.current = start;
+    setNoteCoverageStart(start);
+  }
+
+  function restartNoteCoverage() {
+    setNoteCoverageFrom(currentTime);
+  }
+
   function handlePlayerPlay() {
     if (noteSegmentStartRef.current === null) {
-      noteSegmentStartRef.current = currentTime;
+      setNoteCoverageFrom(currentTime);
     }
     playIntentRef.current = true;
     setIsPlaying(true);
@@ -197,7 +229,7 @@ export default function PlayerPage() {
     }
 
     if (noteSegmentStartRef.current === null) {
-      noteSegmentStartRef.current = currentTime;
+      setNoteCoverageFrom(currentTime);
     }
     playIntentRef.current = true;
     playerRef.current?.play();
@@ -209,7 +241,7 @@ export default function PlayerPage() {
 
     pendingSkipTargetRef.current = playableTime;
     seekingRef.current = true;
-    noteSegmentStartRef.current = playableTime;
+    setNoteCoverageFrom(playableTime);
     setCurrentTime(playableTime);
     playerRef.current?.seek(playableTime);
     playerRef.current?.play();
@@ -291,7 +323,7 @@ export default function PlayerPage() {
             : note
         ),
       });
-      noteSegmentStartRef.current = endTime;
+      setNoteCoverageFrom(endTime);
       closeInlineNote();
       return;
     }
@@ -308,7 +340,7 @@ export default function PlayerPage() {
       notes: [...(clip.notes ?? []), note],
     });
     recordClipWatched(instance.videoId);
-    noteSegmentStartRef.current = note.endTime;
+    setNoteCoverageFrom(note.endTime);
     closeInlineNote();
   }
 
@@ -635,7 +667,7 @@ export default function PlayerPage() {
 
     // Suppress stale time updates while seeking
     seekingRef.current = true;
-    noteSegmentStartRef.current = seekTime;
+    setNoteCoverageFrom(seekTime);
     setCurrentTime(seekTime);
 
     playerRef.current?.seek(seekTime);
@@ -805,6 +837,14 @@ export default function PlayerPage() {
               >
                 N Note
               </button>
+              <button
+                type="button"
+                className="custom-video-btn"
+                onClick={restartNoteCoverage}
+                aria-label="Restart note coverage from current timestamp"
+              >
+                Restart coverage
+              </button>
               <span className="custom-video-time">
                 {formatTime(currentTime)} / {formatTime(duration)}
                 <span>{formatTime(remainingDuration)} left</span>
@@ -879,6 +919,14 @@ export default function PlayerPage() {
                     }}
                   />
                 ))}
+                {noteCoverageRange && noteCoverageWidthPct > 0.05 && (
+                  <div
+                    className="remaining-progress-note-coverage"
+                    style={{ left: `${noteCoverageLeftPct}%`, width: `${noteCoverageWidthPct}%` }}
+                    title={`Current note ${formatTime(noteCoverageRange.start)} - ${formatTime(noteCoverageRange.end)}`}
+                    aria-hidden="true"
+                  />
+                )}
                 <div className="remaining-progress-playhead" style={{ left: `${remainingPlayheadPct}%` }} />
               </div>
             </div>
