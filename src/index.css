@@ -1950,8 +1950,8 @@ input, textarea {
 
 /* ===== Player Sidebar ===== */
 .player-sidebar {
-  width: 360px;
-  min-width: 360px;
+  width: 320px;
+  min-width: 320px;
   background: var(--surface);
   border-right: 2px solid var(--border);
   display: flex;
@@ -2255,23 +2255,27 @@ input, textarea {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 24px 32px;
+  padding: 16px 20px;
   overflow-y: auto;
   min-width: 0;
 }
 
 .player-video-container {
+  position: relative;
   width: 100%;
   aspect-ratio: 16/9;
   background: #000;
   border-radius: var(--radius);
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 0;
   box-shadow: var(--shadow-md);
 }
 
 .custom-video-shell {
   position: relative;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 16px;
 }
 
 .custom-video-shell:fullscreen {
@@ -2281,13 +2285,17 @@ input, textarea {
   border-radius: 0;
   margin: 0;
   display: grid;
-  place-items: center;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 0;
+  background: #000;
 }
 
-.custom-video-shell:fullscreen .local-video,
-.custom-video-shell:fullscreen .youtube-wrapper {
-  position: absolute;
-  inset: 0;
+.custom-video-shell:fullscreen .player-video-container {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .local-video {
@@ -2312,24 +2320,30 @@ input, textarea {
   pointer-events: none;
 }
 
+.custom-video-shell.native-youtube-controls .youtube-wrapper {
+  pointer-events: auto;
+}
+
 .custom-video-controls {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: static;
   z-index: 8;
   display: grid;
   gap: 10px;
-  padding: 52px 18px 14px;
+  padding: 0;
   color: #fff;
-  background:
-    linear-gradient(180deg, rgba(0,0,0,0), rgba(2,6,12,0.64) 38%, rgba(2,6,12,0.94));
-  pointer-events: none;
+  background: none;
+  pointer-events: auto;
+}
+
+.custom-video-shell:fullscreen .custom-video-controls {
+  padding: 10px 16px 14px;
+  background: #03070c;
 }
 
 .custom-video-controls-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 8px;
   border: 1px solid rgba(255,255,255,0.12);
@@ -2396,7 +2410,7 @@ input, textarea {
 }
 
 .custom-video-time {
-  flex: 1;
+  flex: 1 1 240px;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -2426,7 +2440,7 @@ input, textarea {
   align-items: center;
   padding: 4px;
   border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 12px;
+  border-radius: 6px;
   background: rgba(4,8,14,0.62);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 14px 34px rgba(0,0,0,0.32);
   backdrop-filter: blur(14px);
@@ -2438,7 +2452,7 @@ input, textarea {
   width: 100%;
   height: 16px;
   overflow: hidden;
-  border-radius: 9px;
+  border-radius: 0;
   background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.04));
   cursor: default;
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14), inset 0 -10px 18px rgba(0,0,0,0.24);
@@ -2496,7 +2510,7 @@ input, textarea {
 @media (max-width: 760px) {
   .custom-video-controls {
     gap: 8px;
-    padding: 40px 10px 10px;
+    padding: 0;
   }
 
   .custom-video-controls-row {
@@ -4458,7 +4472,6 @@ input, textarea {
   }
   .player-video-container {
     aspect-ratio: 16 / 10;
-    margin-bottom: 12px;
   }
   .clip-panel {
     padding: 0 12px 14px;

@@ -119,8 +119,9 @@ export default function PlayerPage() {
   const [loading, setLoading] = useState(true);
   const [clipWatchProgress, setClipWatchProgress] = useState(0);
   const [celebration, setCelebration] = useState<{ key: number; clipNumber: number } | null>(null);
-  const [showWatchedRanges, setShowWatchedRanges] = useState(false);
-  const [skipNotedRanges, setSkipNotedRanges] = useState(false);
+  const [showWatchedRanges, setShowWatchedRanges] = useState(true);
+  const [skipNotedRanges, setSkipNotedRanges] = useState(true);
+  const [showNativeYoutubeControls, setShowNativeYoutubeControls] = useState(false);
 
   const trackersRef = useRef(new Map<number, WatchTracker>());
   const countedRef = useRef(new Set<number>());
@@ -201,6 +202,12 @@ export default function PlayerPage() {
 
   function restartNoteCoverage() {
     setNoteCoverageFrom(currentTime);
+  }
+
+  function createNoteId() {
+    return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : generateId();
   }
 
   function handlePlayerPlay() {
@@ -329,7 +336,7 @@ export default function PlayerPage() {
     }
 
     const note: ClipNote = {
-      id: generateId(),
+      id: createNoteId(),
       startTime: start,
       endTime,
       text: noteText,
@@ -511,41 +518,6 @@ export default function PlayerPage() {
     window.setTimeout(() => noteTextareaRef.current?.focus(), 0);
   }, [noteWindow]);
 
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      const target = event.target;
-      const isTyping = target instanceof HTMLInputElement
-        || target instanceof HTMLTextAreaElement
-        || target instanceof HTMLSelectElement
-        || (target instanceof HTMLElement && target.isContentEditable);
-
-      if (isTyping || showSummary || noteWindow) return;
-      const key = event.key.toLowerCase();
-      if (key === 'escape' && document.fullscreenElement === fullscreenHostRef.current) {
-        event.preventDefault();
-        void document.exitFullscreen();
-        return;
-      }
-      if (key === 'f') {
-        event.preventDefault();
-        if (!event.repeat) toggleFullscreen();
-        return;
-      }
-      if ((event.code === 'Space' || event.key === ' ') && document.fullscreenElement === fullscreenHostRef.current) {
-        event.preventDefault();
-        if (!event.repeat) togglePlayback();
-        return;
-      }
-      if (key === 'n') {
-        event.preventDefault();
-        openInlineNote();
-      }
-    }
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  });
-
   function handleTimeUpdate(time: number) {
     // Skip stale time updates that arrive during a pending seek
     if (seekingRef.current) return;
@@ -647,6 +619,10 @@ export default function PlayerPage() {
     seekToResolvedTime(playableTime);
   }
 
+  function seekBy(seconds: number) {
+    seekToTime(currentTime + seconds);
+  }
+
   function seekToResolvedTime(time: number) {
     const seekTime = clampTime(time, duration);
     const newClipIdx = getClipIndexForTime(seekTime);
@@ -677,6 +653,56 @@ export default function PlayerPage() {
     setTimeout(() => { seekingRef.current = false; }, 500);
     return true;
   }
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      const target = event.target;
+      const isTyping = target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+        || (target instanceof HTMLElement && target.isContentEditable);
+
+      if (isTyping || showSummary || noteWindow) return;
+      const key = event.key.toLowerCase();
+      if (key === 'escape' && document.fullscreenElement === fullscreenHostRef.current) {
+        event.preventDefault();
+        void document.exitFullscreen();
+        return;
+      }
+      if (key === 'f') {
+        event.preventDefault();
+        if (!event.repeat) toggleFullscreen();
+        return;
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        if (!event.repeat) seekBy(-10);
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        if (!event.repeat) seekBy(10);
+        return;
+      }
+      if ((event.code === 'Space' || event.key === ' ') && document.fullscreenElement === fullscreenHostRef.current) {
+        event.preventDefault();
+        if (!event.repeat) togglePlayback();
+        return;
+      }
+      if ((event.ctrlKey || event.metaKey) && key === 'n') {
+        event.preventDefault();
+        if (!event.repeat) openInlineNote();
+        return;
+      }
+      if (key === 'n') {
+        event.preventDefault();
+        openInlineNote();
+      }
+    }
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  });
 
   function handleSeekToNote(note: ClipNote) {
     const start = clampTime(note.startTime, duration);
@@ -739,11 +765,6 @@ export default function PlayerPage() {
   const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
   const currentClip = clips[activeClipIndex];
   const summaryClip = clips[summaryClipIndex];
-  const currentTranscript = video?.youlearnTranscript?.length && currentClip
-    ? video.youlearnTranscript.filter(segment =>
-      segment.startTime >= currentClip.startTime && segment.startTime < currentClip.endTime
-    )
-    : [];
   const summaryClipText = video?.youlearnTranscript?.length && summaryClip
     ? video.youlearnTranscript
       .filter(segment =>
@@ -794,30 +815,32 @@ export default function PlayerPage() {
       <div className="player-main">
         <div
           ref={fullscreenHostRef}
-          className={`player-video-container custom-video-shell ${isFullscreen ? 'is-fullscreen' : ''}`}
-          onClick={handleVideoShellClick}
+          className={`custom-video-shell ${isFullscreen ? 'is-fullscreen' : ''} ${showNativeYoutubeControls ? 'native-youtube-controls' : ''}`}
         >
-          {useFilePlayer ? (
-            <LocalPlayer
-              ref={playerRef}
-              src={videoSrc}
-              onTimeUpdate={handleTimeUpdate}
-              onPlay={handlePlayerPlay}
-              onPause={handlePlayerPause}
-              onReady={handleReady}
-              onEnded={handlePlayerEnded}
-            />
-          ) : (
-            <YouTubePlayer
-              ref={playerRef}
-              videoId={playerYouTubeId!}
-              onTimeUpdate={handleTimeUpdate}
-              onPlay={handlePlayerPlay}
-              onPause={handlePlayerPause}
-              onReady={handleReady}
-              onEnded={handlePlayerEnded}
-            />
-          )}
+          <div className="player-video-container" onClick={handleVideoShellClick}>
+            {useFilePlayer ? (
+              <LocalPlayer
+                ref={playerRef}
+                src={videoSrc}
+                onTimeUpdate={handleTimeUpdate}
+                onPlay={handlePlayerPlay}
+                onPause={handlePlayerPause}
+                onReady={handleReady}
+                onEnded={handlePlayerEnded}
+              />
+            ) : (
+              <YouTubePlayer
+                ref={playerRef}
+                videoId={playerYouTubeId!}
+                nativeControls={showNativeYoutubeControls}
+                onTimeUpdate={handleTimeUpdate}
+                onPlay={handlePlayerPlay}
+                onPause={handlePlayerPause}
+                onReady={handleReady}
+                onEnded={handlePlayerEnded}
+              />
+            )}
+          </div>
 
           <div className="custom-video-controls" aria-label="Video controls">
             <div className="custom-video-controls-row">
@@ -828,6 +851,22 @@ export default function PlayerPage() {
                 aria-label={isPlaying ? 'Pause video' : 'Play video'}
               >
                 {isPlaying ? 'Pause' : 'Play'}
+              </button>
+              <button
+                type="button"
+                className="custom-video-btn"
+                onClick={() => seekBy(-10)}
+                aria-label="Go back 10 seconds"
+              >
+                -10s
+              </button>
+              <button
+                type="button"
+                className="custom-video-btn"
+                onClick={() => seekBy(10)}
+                aria-label="Go forward 10 seconds"
+              >
+                +10s
               </button>
               <button
                 type="button"
@@ -867,6 +906,17 @@ export default function PlayerPage() {
               >
                 {skipNotedRanges ? 'Jumping on' : 'Jump notes'}
               </button>
+              {playerYouTubeId && (
+                <button
+                  type="button"
+                  className={`custom-video-btn ${showNativeYoutubeControls ? 'primary' : ''}`}
+                  onClick={() => setShowNativeYoutubeControls(value => !value)}
+                  aria-pressed={showNativeYoutubeControls}
+                  aria-label={showNativeYoutubeControls ? 'Use custom player controls' : 'Show YouTube native controls'}
+                >
+                  {showNativeYoutubeControls ? 'Custom controls' : 'YouTube controls'}
+                </button>
+              )}
               <button
                 type="button"
                 className="custom-video-btn"
@@ -1055,12 +1105,6 @@ export default function PlayerPage() {
           </div>
         ) : null}
 
-        {currentTranscript.length > 0 && (
-          <div className="current-clip-transcript">
-            <strong>Transcript:</strong>
-            <p>{currentTranscript.map(segment => segment.text).join(' ')}</p>
-          </div>
-        )}
       </div>
 
       {showSummary && clips[summaryClipIndex] && (
