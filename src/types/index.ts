@@ -138,6 +138,7 @@ export interface PlayerRef {
   seek: (time: number) => void;
   play: () => void;
   pause: () => void;
+  setPlaybackRate?: (rate: number) => void;
   mute?: () => void;
   unMute?: () => void;
 }

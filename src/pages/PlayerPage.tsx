@@ -17,6 +17,9 @@ import { LIFE_RECOMMENDATIONS_VERSION } from '../utils/lifeRecommendations';
 
 const CELEBRATION_DURATION_MS = 1600;
 const SUMMARY_PROMPT_DELAY_MS = 900;
+const MIN_PLAYBACK_RATE = 0.25;
+const MAX_PLAYBACK_RATE = 4;
+const PLAYBACK_RATE_STEP = 0.25;
 
 interface TimeRange {
   start: number;
@@ -28,8 +31,22 @@ interface NoteDraftWindow extends TimeRange {
   noteId?: string;
 }
 
+interface ShortcutHandlers {
+  showSummary: boolean;
+  noteWindowOpen: boolean;
+  toggleFullscreen: () => void;
+  seekBy: (seconds: number) => void;
+  togglePlayback: () => void;
+  openInlineNote: () => void;
+  setDirectPlaybackRate: (rate: number) => void;
+}
+
 function clampTime(value: number, duration: number) {
   return Math.max(0, Math.min(duration || 0, value));
+}
+
+function clampPlaybackRate(value: number) {
+  return Math.max(MIN_PLAYBACK_RATE, Math.min(MAX_PLAYBACK_RATE, Math.round(value * 4) / 4));
 }
 
 function normalizeRanges(ranges: TimeRange[], duration: number): TimeRange[] {
@@ -122,11 +139,13 @@ export default function PlayerPage() {
   const [showWatchedRanges, setShowWatchedRanges] = useState(true);
   const [skipNotedRanges, setSkipNotedRanges] = useState(true);
   const [showNativeYoutubeControls, setShowNativeYoutubeControls] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
 
   const trackersRef = useRef(new Map<number, WatchTracker>());
   const countedRef = useRef(new Set<number>());
   const prevClipRef = useRef(-1);
   const seekingRef = useRef(false);
+  const playbackRateRef = useRef(1);
   const playIntentRef = useRef(false);
   const noteReviewRangeRef = useRef<TimeRange | null>(null);
   const pendingSkipTargetRef = useRef<number | null>(null);
@@ -134,6 +153,15 @@ export default function PlayerPage() {
   const celebrationTimerRef = useRef<number | null>(null);
   const summaryTimerRef = useRef<number | null>(null);
   const celebrationKeyRef = useRef(0);
+  const shortcutsRef = useRef<ShortcutHandlers>({
+    showSummary: false,
+    noteWindowOpen: false,
+    toggleFullscreen: () => {},
+    seekBy: () => {},
+    togglePlayback: () => {},
+    openInlineNote: () => {},
+    setDirectPlaybackRate: () => {},
+  });
 
   const clips = useMemo(() => instance?.clips || [], [instance?.clips]);
   const watchedNoteRanges = useMemo(
@@ -240,6 +268,13 @@ export default function PlayerPage() {
     }
     playIntentRef.current = true;
     playerRef.current?.play();
+  }
+
+  function setDirectPlaybackRate(rate: number) {
+    const nextRate = clampPlaybackRate(rate);
+    playbackRateRef.current = nextRate;
+    setPlaybackRate(nextRate);
+    playerRef.current?.setPlaybackRate?.(nextRate);
   }
 
   function jumpToPlayableTime(time: number) {
@@ -609,6 +644,7 @@ export default function PlayerPage() {
 
   function handleReady(dur: number) {
     setDuration(dur);
+    playerRef.current?.setPlaybackRate?.(playbackRateRef.current);
   }
 
   function getPlayableSeekTime(time: number): number | null {
@@ -665,6 +701,18 @@ export default function PlayerPage() {
   }
 
   useEffect(() => {
+    shortcutsRef.current = {
+      showSummary,
+      noteWindowOpen: Boolean(noteWindow),
+      toggleFullscreen,
+      seekBy,
+      togglePlayback,
+      openInlineNote,
+      setDirectPlaybackRate,
+    };
+  });
+
+  useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       const target = event.target;
       const isTyping = target instanceof HTMLInputElement
@@ -672,7 +720,8 @@ export default function PlayerPage() {
         || target instanceof HTMLSelectElement
         || (target instanceof HTMLElement && target.isContentEditable);
 
-      if (isTyping || showSummary || noteWindow) return;
+      const shortcuts = shortcutsRef.current;
+      if (isTyping || shortcuts.showSummary || shortcuts.noteWindowOpen) return;
       const key = event.key.toLowerCase();
       if (key === 'escape' && document.fullscreenElement === fullscreenHostRef.current) {
         event.preventDefault();
@@ -681,38 +730,46 @@ export default function PlayerPage() {
       }
       if (key === 'f') {
         event.preventDefault();
-        if (!event.repeat) toggleFullscreen();
+        if (!event.repeat) shortcuts.toggleFullscreen();
         return;
       }
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        if (!event.repeat) seekBy(-10);
+        if (!event.repeat) shortcuts.seekBy(-10);
         return;
       }
       if (event.key === 'ArrowRight') {
         event.preventDefault();
-        if (!event.repeat) seekBy(10);
+        if (!event.repeat) shortcuts.seekBy(10);
         return;
       }
       if (event.code === 'Space' || event.key === ' ') {
         event.preventDefault();
-        if (!event.repeat) togglePlayback();
+        if (!event.repeat) shortcuts.togglePlayback();
+        return;
+      }
+      if (!event.ctrlKey && !event.metaKey && !event.altKey && (key === 'a' || key === 's' || key === 'd')) {
+        event.preventDefault();
+        if (event.repeat) return;
+        if (key === 'a') shortcuts.setDirectPlaybackRate(playbackRateRef.current - PLAYBACK_RATE_STEP);
+        if (key === 's') shortcuts.setDirectPlaybackRate(1);
+        if (key === 'd') shortcuts.setDirectPlaybackRate(playbackRateRef.current + PLAYBACK_RATE_STEP);
         return;
       }
       if ((event.ctrlKey || event.metaKey) && key === 'n') {
         event.preventDefault();
-        if (!event.repeat) openInlineNote();
+        if (!event.repeat) shortcuts.openInlineNote();
         return;
       }
       if (key === 'n') {
         event.preventDefault();
-        openInlineNote();
+        shortcuts.openInlineNote();
       }
     }
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  });
+  }, []);
 
   function handleSeekToNote(note: ClipNote) {
     const start = clampTime(note.startTime, duration);
@@ -899,7 +956,7 @@ export default function PlayerPage() {
               </button>
               <span className="custom-video-time">
                 {formatTime(currentTime)} / {formatTime(duration)}
-                <span>{formatTime(remainingDuration)} left</span>
+                <span>{formatTime(remainingDuration)} left · {playbackRate.toFixed(2).replace(/\.00$/, '')}x</span>
               </span>
               <button
                 type="button"

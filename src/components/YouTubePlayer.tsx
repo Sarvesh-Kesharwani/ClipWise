@@ -38,6 +38,7 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
       },
       play: () => { playerRef.current?.playVideo(); },
       pause: () => { playerRef.current?.pauseVideo(); },
+      setPlaybackRate: (rate: number) => { playerRef.current?.setPlaybackRate?.(rate); },
       mute: () => { playerRef.current?.mute?.(); },
       unMute: () => { playerRef.current?.unMute?.(); },
     }));

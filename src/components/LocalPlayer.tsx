@@ -14,6 +14,9 @@ const LocalPlayer = forwardRef<PlayerRef, Props>(({ src, onTimeUpdate, onPlay, o
     },
     play: () => { videoRef.current?.play(); },
     pause: () => { videoRef.current?.pause(); },
+    setPlaybackRate: (rate: number) => {
+      if (videoRef.current) videoRef.current.playbackRate = rate;
+    },
   }));
 
   useEffect(() => {
