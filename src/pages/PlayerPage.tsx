@@ -764,6 +764,9 @@ export default function PlayerPage() {
   const summaryRequiredClip = clips[activeClipIndex];
   const summaryRequiredClipIndex = needsSummary(summaryRequiredClip) ? summaryRequiredClip.index : null;
   const currentClip = clips[activeClipIndex];
+  const clipsWithNotes = clips
+    .map((clip, arrayIndex) => ({ clip, arrayIndex }))
+    .filter(({ clip }) => clip.notes?.length);
   const summaryClip = clips[summaryClipIndex];
   const summaryClipText = video?.youlearnTranscript?.length && summaryClip
     ? video.youlearnTranscript
@@ -1070,36 +1073,41 @@ export default function PlayerPage() {
           </div>
         )}
 
-        {clips[activeClipIndex]?.notes?.length ? (
+        {clipsWithNotes.length ? (
           <div className="current-clip-summary current-clip-notes">
-            <strong>Clip {activeClipIndex + 1} notes:</strong>
-            {clips[activeClipIndex].notes?.map(note => (
-              <div className="current-clip-note-item" key={note.id}>
-                <button
-                  type="button"
-                  className="current-clip-note-jump"
-                  onClick={() => handleSeekToNote(note)}
-                  aria-label={`Play note from ${formatTime(note.startTime)}`}
-                >
-                  <span className="current-clip-note-time">{formatTime(note.startTime)} - {formatTime(note.endTime)}</span>
-                  <p>{note.text}</p>
-                </button>
-                <div className="current-clip-note-actions">
-                  <button
-                    type="button"
-                    className="current-clip-note-edit"
-                    onClick={() => openEditInlineNote(activeClipIndex, note)}
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    className="current-clip-note-delete"
-                    onClick={() => handleDeleteInlineNote(activeClipIndex, note.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
+            <strong>Clip notes:</strong>
+            {clipsWithNotes.map(({ clip, arrayIndex }) => (
+              <div className="current-clip-note-group" key={clip.index}>
+                <span className="current-clip-note-label">Clip {clip.index + 1}</span>
+                {clip.notes?.map(note => (
+                  <div className="current-clip-note-item" key={note.id}>
+                    <button
+                      type="button"
+                      className="current-clip-note-jump"
+                      onClick={() => handleSeekToNote(note)}
+                      aria-label={`Play note from ${formatTime(note.startTime)}`}
+                    >
+                      <span className="current-clip-note-time">{formatTime(note.startTime)} - {formatTime(note.endTime)}</span>
+                      <p>{note.text}</p>
+                    </button>
+                    <div className="current-clip-note-actions">
+                      <button
+                        type="button"
+                        className="current-clip-note-edit"
+                        onClick={() => openEditInlineNote(arrayIndex, note)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="current-clip-note-delete"
+                        onClick={() => handleDeleteInlineNote(arrayIndex, note.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
           </div>

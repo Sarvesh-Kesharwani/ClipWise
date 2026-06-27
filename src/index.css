@@ -2699,6 +2699,18 @@ input, textarea {
   gap: 8px;
 }
 
+.current-clip-note-group {
+  display: grid;
+  gap: 6px;
+}
+
+.current-clip-note-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
 .current-clip-notes p {
   margin: 0;
   color: var(--text-primary);
