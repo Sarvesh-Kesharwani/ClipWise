@@ -2485,6 +2485,11 @@ input, textarea {
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.16);
 }
 
+.remaining-progress-segment.watched.rewatchable {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 .remaining-progress-note-coverage {
   position: absolute;
   top: 0;

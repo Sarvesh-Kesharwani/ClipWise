@@ -277,6 +277,7 @@ export default function PlayerPage() {
   function handleVideoShellClick(event: ReactMouseEvent<HTMLDivElement>) {
     const target = event.target;
     if (target instanceof HTMLElement && target.closest('.custom-video-controls, .fullscreen-note-overlay')) return;
+    event.currentTarget.focus();
     togglePlayback();
   }
 
@@ -375,6 +376,15 @@ export default function PlayerPage() {
     const rect = event.currentTarget.getBoundingClientRect();
     const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
     seekToTime(range.start + pct * (range.end - range.start));
+  }
+
+  function handleWatchedProgressClick(event: ReactMouseEvent<HTMLDivElement>, range: TimeRange) {
+    if (skipNotedRanges) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width)));
+    pendingSkipTargetRef.current = null;
+    noteReviewRangeRef.current = { start: range.start, end: range.end };
+    seekToResolvedTime(range.start + pct * (range.end - range.start));
   }
 
   function triggerCelebration(clipIndex: number) {
@@ -684,7 +694,7 @@ export default function PlayerPage() {
         if (!event.repeat) seekBy(10);
         return;
       }
-      if ((event.code === 'Space' || event.key === ' ') && document.fullscreenElement === fullscreenHostRef.current) {
+      if (event.code === 'Space' || event.key === ' ') {
         event.preventDefault();
         if (!event.repeat) togglePlayback();
         return;
@@ -820,7 +830,7 @@ export default function PlayerPage() {
           ref={fullscreenHostRef}
           className={`custom-video-shell ${isFullscreen ? 'is-fullscreen' : ''} ${showNativeYoutubeControls ? 'native-youtube-controls' : ''}`}
         >
-          <div className="player-video-container" onClick={handleVideoShellClick}>
+          <div className="player-video-container" onClick={handleVideoShellClick} tabIndex={-1}>
             {useFilePlayer ? (
               <LocalPlayer
                 ref={playerRef}
@@ -939,13 +949,25 @@ export default function PlayerPage() {
                 {showWatchedRanges && watchedNoteRanges.map(range => (
                   <div
                     key={`watched-${range.start}-${range.end}`}
-                    className="remaining-progress-segment watched"
+                    className={`remaining-progress-segment watched ${skipNotedRanges ? '' : 'rewatchable'}`}
                     style={{
                       left: `${duration > 0 ? (range.start / duration) * 100 : 0}%`,
                       width: `${duration > 0 ? ((range.end - range.start) / duration) * 100 : 0}%`,
                     }}
                     title={`Watched ${formatTime(range.start)} - ${formatTime(range.end)}`}
-                    aria-hidden="true"
+                    role={skipNotedRanges ? undefined : 'button'}
+                    tabIndex={skipNotedRanges ? undefined : 0}
+                    aria-label={skipNotedRanges ? undefined : `Replay watched range from ${formatTime(range.start)} to ${formatTime(range.end)}`}
+                    aria-hidden={skipNotedRanges ? 'true' : undefined}
+                    onClick={event => handleWatchedProgressClick(event, range)}
+                    onKeyDown={event => {
+                      if (!skipNotedRanges && (event.key === 'Enter' || event.key === ' ')) {
+                        event.preventDefault();
+                        pendingSkipTargetRef.current = null;
+                        noteReviewRangeRef.current = { start: range.start, end: range.end };
+                        seekToResolvedTime(range.start);
+                      }
+                    }}
                   />
                 ))}
                 {remainingRanges.map(range => (
