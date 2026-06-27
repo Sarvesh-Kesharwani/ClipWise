@@ -10,7 +10,7 @@ interface Props extends PlayerProps {
 }
 
 const YouTubePlayer = forwardRef<PlayerRef, Props>(
-  ({ videoId, autoPlay = false, muted = false, nativeControls = false, onTimeUpdate, onPlay, onPause, onReady, onEnded }, ref) => {
+  ({ videoId, autoPlay = false, muted = false, onTimeUpdate, onPlay, onPause, onReady, onEnded }, ref) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const playerRef = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -77,11 +77,11 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
           height: '100%',
           playerVars: {
             autoplay: optionsRef.current.autoPlay ? 1 : 0,
-            controls: nativeControls ? 1 : 0,
-            disablekb: nativeControls ? 0 : 1,
+            controls: 1,
+            disablekb: 0,
             modestbranding: 1,
             rel: 0,
-            fs: nativeControls ? 1 : 0,
+            fs: 1,
             playsinline: 1,
             mute: optionsRef.current.muted ? 1 : 0,
           },
@@ -110,7 +110,7 @@ const YouTubePlayer = forwardRef<PlayerRef, Props>(
         // Clean up the imperatively created element
         if (targetDiv.parentNode) targetDiv.parentNode.removeChild(targetDiv);
       };
-    }, [videoId, nativeControls, handleStateChange]);
+    }, [videoId, handleStateChange]);
 
     return <div ref={containerRef} className="youtube-wrapper" />;
   }
